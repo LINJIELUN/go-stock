@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	assistantweb "go-stock/ai-assistant-web"
+	"go-stock/backend/bootstrap"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	log "go-stock/backend/logger"
@@ -78,7 +79,9 @@ func main() {
 	data.SetAppIcon(icon)
 	db.Init("")
 	data.InitAnalyzeSentiment()
-	go AutoMigrate()
+	// StockBasic must exist before the embedded bootstrap data is loaded.  Keep
+	// this synchronous so the first stock search cannot race database setup.
+	AutoMigrate()
 
 	//db.Dao.Model(&data.Group{}).Where("id = ?", 0).FirstOrCreate(&data.Group{
 	//	Name: "默认分组",
@@ -305,6 +308,10 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.BKFundFlow{})
 	db.Dao.AutoMigrate(&models.ConceptFundFlow{})
 	db.Dao.AutoMigrate(&models.DailyOperationPlan{})
+
+	if err := bootstrap.InitializeStockBasics(db.Dao, stocksBin, bootstrap.StockBasicInsertBatchSize); err != nil {
+		log.SugaredLogger.Errorf("初始化内置股票基础池失败: %v", err)
+	}
 
 	//updateMultipleModel()
 
