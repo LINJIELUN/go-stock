@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/duke-git/lancet/v2/convertor"
-	"github.com/duke-git/lancet/v2/slice"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/logger"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -78,7 +77,14 @@ func main() {
 	data.SetAppIcon(icon)
 	db.Init("")
 	data.InitAnalyzeSentiment()
-	go AutoMigrate()
+	// StockBasic must exist before the embedded pool is seeded. Running migration
+	// asynchronously left first-run databases empty when the UI searched them.
+	AutoMigrate()
+	if added, err := seedStockData(stocksBin); err != nil {
+		log.SugaredLogger.Errorf("初始化内置 A 股股票池失败: %v", err)
+	} else {
+		log.SugaredLogger.Infof("内置 A 股股票池初始化完成，新增 %d 条", added)
+	}
 
 	//db.Dao.Model(&data.Group{}).Where("id = ?", 0).FirstOrCreate(&data.Group{
 	//	Name: "默认分组",
@@ -403,71 +409,77 @@ func initStockData(ctx context.Context) {
 	defer func() {
 		go runtime.EventsEmit(ctx, "loadingMsg", "done")
 	}()
-	fields := "ts_code,symbol,name,area,industry,cnspell,market,list_date,act_name,act_ent_type,fullname,exchange,list_status,curr_type,enname,delist_date,is_hs"
-	log.SugaredLogger.Info("init stock data")
-	res := &data.TushareStockBasicResponse{}
-	err := json.Unmarshal(stocksBin, res)
+	added, err := seedStockData(stocksBin)
 	if err != nil {
-		log.SugaredLogger.Error(err.Error())
+		log.SugaredLogger.Errorf("init stock data: %v", err)
 		return
 	}
+	log.SugaredLogger.Infof("init stock data complete, added %d", added)
+}
 
+func parseStockBasics(raw []byte) ([]data.StockBasic, error) {
+	fields := "ts_code,symbol,name,area,industry,cnspell,market,list_date,act_name,act_ent_type,fullname,exchange,list_status,curr_type,enname,delist_date,is_hs"
+	res := &data.TushareStockBasicResponse{}
+	if err := json.Unmarshal(raw, res); err != nil {
+		return nil, fmt.Errorf("解析内置股票池: %w", err)
+	}
+
+	fieldIndexes := make(map[string]int, len(res.Data.Fields))
+	for i, field := range res.Data.Fields {
+		fieldIndexes[field] = i
+	}
+	stocks := make([]data.StockBasic, 0, len(res.Data.Items))
 	for _, item := range res.Data.Items {
 		stock := &data.StockBasic{}
 		stockData := map[string]any{}
 		for _, field := range strings.Split(fields, ",") {
-			//logger.SugaredLogger.Infof("field: %s", field)
-			idx := slice.IndexOf(res.Data.Fields, field)
-			if idx == -1 {
+			idx, ok := fieldIndexes[field]
+			if !ok || idx >= len(item) {
 				continue
 			}
 			stockData[field] = item[idx]
 		}
 		jsonData, _ := json.Marshal(stockData)
-		err := json.Unmarshal(jsonData, stock)
-		if err != nil {
-			continue
+		if err := json.Unmarshal(jsonData, stock); err != nil {
+			return nil, fmt.Errorf("解析股票记录: %w", err)
 		}
 		stock.ID = 0
-		var count int64
-		db.Dao.Model(&data.StockBasic{}).Where("ts_code = ?", stock.TsCode).Count(&count)
-		if count > 0 {
-			continue
-		} else {
-			db.Dao.Create(stock)
-		}
-
-		//db.Dao.Model(&data.StockBasic{}).FirstOrCreate(stock, &data.StockBasic{TsCode: stock.TsCode}).Where("ts_code = ?", stock.TsCode).Updates(stock)
+		stocks = append(stocks, *stock)
 	}
+	return stocks, nil
+}
 
-	//for _, item := range res.Data.Items {
-	//	stock := &data.StockBasic{}
-	//	stock.Exchange = convertor.ToString(item[0])
-	//	stock.IsHs = convertor.ToString(item[1])
-	//	stock.Name = convertor.ToString(item[2])
-	//	stock.Industry = convertor.ToString(item[3])
-	//	stock.ListStatus = convertor.ToString(item[4])
-	//	stock.ActName = convertor.ToString(item[5])
-	//	stock.ID = uint(item[6].(float64))
-	//	stock.CurrType = convertor.ToString(item[7])
-	//	stock.Area = convertor.ToString(item[8])
-	//	stock.ListDate = convertor.ToString(item[9])
-	//	stock.DelistDate = convertor.ToString(item[10])
-	//	stock.ActEntType = convertor.ToString(item[11])
-	//	stock.TsCode = convertor.ToString(item[12])
-	//	stock.Symbol = convertor.ToString(item[13])
-	//	stock.Cnspell = convertor.ToString(item[14])
-	//	stock.Fullname = convertor.ToString(item[20])
-	//	stock.Ename = convertor.ToString(item[21])
-	//
-	//	var count int64
-	//	db.Dao.Model(&data.StockBasic{}).Where("ts_code = ?", stock.TsCode).Count(&count)
-	//	if count > 0 {
-	//		continue
-	//	} else {
-	//		db.Dao.Create(stock)
-	//	}
-	//}
+func seedStockData(raw []byte) (int, error) {
+	stocks, err := parseStockBasics(raw)
+	if err != nil {
+		return 0, err
+	}
+	var existingCodes []string
+	if err := db.Dao.Model(&data.StockBasic{}).Pluck("ts_code", &existingCodes).Error; err != nil {
+		return 0, fmt.Errorf("读取现有股票池: %w", err)
+	}
+	existing := make(map[string]struct{}, len(existingCodes))
+	for _, code := range existingCodes {
+		existing[code] = struct{}{}
+	}
+	missing := make([]data.StockBasic, 0, len(stocks))
+	for _, stock := range stocks {
+		if stock.TsCode == "" {
+			continue
+		}
+		if _, ok := existing[stock.TsCode]; ok {
+			continue
+		}
+		existing[stock.TsCode] = struct{}{}
+		missing = append(missing, stock)
+	}
+	if len(missing) == 0 {
+		return 0, nil
+	}
+	if err := db.Dao.CreateInBatches(&missing, 500).Error; err != nil {
+		return 0, fmt.Errorf("写入内置股票池: %w", err)
+	}
+	return len(missing), nil
 }
 
 func checkDir(dir string) {
