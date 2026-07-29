@@ -1,0 +1,71 @@
+name: Windows portable smoke build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-portable:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+
+      - name: Build portable executable
+        run: wails build -clean -platform windows/amd64 -o go-stock-windows-amd64.exe
+
+      - name: Generate checksum and manifest
+        shell: pwsh
+        run: |
+          $exe = "build/bin/go-stock-windows-amd64.exe"
+          if (-not (Test-Path $exe)) { throw "Portable executable was not generated." }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  go-stock-windows-amd64.exe" | Set-Content "$exe.sha256" -Encoding ascii
+          $productVersion = (Get-Content wails.json -Raw | ConvertFrom-Json).info.productVersion
+          [ordered]@{
+            artifact = "go-stock-windows-amd64.exe"
+            sha256 = $hash
+            gitCommit = "${{ github.sha }}"
+            productVersion = $productVersion
+            platform = "windows/amd64"
+            wailsVersion = "v2.11.0"
+            builtAtUtc = [DateTime]::UtcNow.ToString("o")
+          } | ConvertTo-Json | Set-Content "$exe.manifest.json" -Encoding utf8
+
+      - name: Upload portable executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-stock-windows-amd64-${{ github.sha }}
+          path: |
+            build/bin/go-stock-windows-amd64.exe
+            build/bin/go-stock-windows-amd64.exe.sha256
+            build/bin/go-stock-windows-amd64.exe.manifest.json
+          if-no-files-found: error
+          retention-days: 14
