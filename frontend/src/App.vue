@@ -8,7 +8,7 @@ import {
   WindowUnfullscreen,
   WindowSetTitle
 } from '../wailsjs/runtime'
-import {h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
+import {computed, h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
 import {RouterLink, useRouter} from 'vue-router'
 import {createDiscreteApi,darkTheme,lightTheme , NIcon, NText,NButton,dateZhCN,zhCN} from 'naive-ui'
 import {
@@ -28,6 +28,7 @@ import {
   StarOutline,
   StatsChartOutline,
   Wallet, WarningOutline, TimeOutline, SearchOutline,
+  ChevronBackOutline, ChevronForwardOutline, MoonOutline, SunnyOutline,
 } from '@vicons/ionicons5'
 import {AnalyzeSentiment, GetConfig, GetEffectiveSponsorVip, GetGroupList, GetVersionInfo, IsTradingTime, IsHKTradingTime, IsUSTradingTime} from "../wailsjs/go/main/App";
 import FloatingAiAssistant from "./components/FloatingAiAssistant.vue";
@@ -58,6 +59,7 @@ const telegraph = ref([])
 const groupList = ref([])
 const officialStatement= ref("")
 const marketStatus = ref('')
+const sidebarCollapsed = ref(false)
 let marketStatusTimer = null
 
 const investmentMottos = [
@@ -1036,6 +1038,34 @@ const menuOptions = ref([
   },
 ])
 
+const workspaceMenuOptions = computed(() => menuOptions.value.filter((item) =>
+    !['settings', 'about', 'full', 'hide', 'exit'].includes(item.key)
+))
+
+const currentSectionTitle = computed(() => {
+  const sectionTitles = {
+    stock: '股票自选',
+    market: '市场行情',
+    klineAnalysis: 'K线分析',
+    fund: '基金中心',
+    agent: 'AI 智能体',
+    research: '研究中心',
+    settings: '基础设置',
+    aiConfigs: 'AI 模型服务',
+    about: '关于 go-stock',
+  }
+  return sectionTitles[activeKey.value] || '投资工作台'
+})
+
+function navigateTo(name, key = name) {
+  activeKey.value = key
+  router.push({name})
+}
+
+function toggleTheme() {
+  enableDarkTheme.value = enableDarkTheme.value ? null : darkTheme
+}
+
 // 重建"股票自选"菜单的分组子项（保留"全部"，用最新分组列表替换其余子项）
 function refreshStockGroupMenu() {
   GetGroupList().then(result => {
@@ -1284,9 +1314,98 @@ onMounted(() => {
             >
 <!--              <FloatingAiAssistant />-->
               <FloatingAgentAssistant />
-              <n-flex>
-                <n-grid x-gap="12" :cols="1">
-                  <n-gi>
+              <div class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+                <aside class="app-sidebar">
+                  <div class="brand-block">
+                    <div class="brand-mark">GS</div>
+                    <div v-if="!sidebarCollapsed" class="brand-copy">
+                      <strong>go-stock</strong>
+                      <span>AI 投资研究工作台</span>
+                    </div>
+                  </div>
+
+                  <div v-if="!sidebarCollapsed" class="nav-section-label">功能导航</div>
+                  <n-scrollbar class="sidebar-scroll">
+                    <n-menu
+                        v-model:value="activeKey"
+                        mode="vertical"
+                        :collapsed="sidebarCollapsed"
+                        :collapsed-width="68"
+                        :collapsed-icon-size="22"
+                        :indent="20"
+                        :options="workspaceMenuOptions"
+                        :dropdown-props="{ menuProps: () => ({ style: 'max-height: 72vh; overflow-y: auto;' }) }"
+                    />
+                  </n-scrollbar>
+
+                  <div class="sidebar-footer">
+                    <n-tooltip placement="top" trigger="hover">
+                      <template #trigger>
+                        <n-button quaternary circle @click="navigateTo('settings')">
+                          <template #icon><n-icon :component="SettingsOutline" /></template>
+                        </n-button>
+                      </template>
+                      设置
+                    </n-tooltip>
+                    <n-tooltip placement="top" trigger="hover">
+                      <template #trigger>
+                        <n-button quaternary circle @click="navigateTo('about')">
+                          <template #icon><n-icon :component="InformationOutline" /></template>
+                        </n-button>
+                      </template>
+                      关于
+                    </n-tooltip>
+                    <n-tooltip placement="top" trigger="hover">
+                      <template #trigger>
+                        <n-button quaternary circle @click="Hide">
+                          <template #icon><n-icon :component="SlideHide24Filled" /></template>
+                        </n-button>
+                      </template>
+                      隐藏至托盘
+                    </n-tooltip>
+                    <n-tooltip placement="top" trigger="hover">
+                      <template #trigger>
+                        <n-button quaternary circle type="error" @click="Quit">
+                          <template #icon><n-icon :component="PowerOutline" /></template>
+                        </n-button>
+                      </template>
+                      退出程序
+                    </n-tooltip>
+                  </div>
+                </aside>
+
+                <main class="app-main">
+                  <header class="app-header">
+                    <div class="header-leading">
+                      <n-button quaternary circle class="collapse-button" @click="sidebarCollapsed = !sidebarCollapsed">
+                        <template #icon>
+                          <n-icon :component="sidebarCollapsed ? ChevronForwardOutline : ChevronBackOutline" />
+                        </template>
+                      </n-button>
+                      <div>
+                        <div class="page-title">{{ currentSectionTitle }}</div>
+                        <div class="page-subtitle">{{ marketStatus || '正在获取市场交易状态…' }}</div>
+                      </div>
+                    </div>
+                    <div class="header-actions">
+                      <n-tooltip trigger="hover">
+                        <template #trigger>
+                          <n-button quaternary circle @click="toggleTheme">
+                            <template #icon>
+                              <n-icon :component="enableDarkTheme ? SunnyOutline : MoonOutline" />
+                            </template>
+                          </n-button>
+                        </template>
+                        {{ enableDarkTheme ? '切换浅色模式' : '切换深色模式' }}
+                      </n-tooltip>
+                      <n-button secondary type="primary" @click="navigateTo('settings')">
+                        <template #icon><n-icon :component="SettingsOutline" /></template>
+                        设置
+                      </n-button>
+                    </div>
+                  </header>
+
+                  <section class="app-content">
                     <n-spin :show="loading">
                       <template #description>
                         {{ loadingMsg }}
@@ -1302,20 +1421,9 @@ onMounted(() => {
                         <RouterView/>
                       </n-scrollbar>
                     </n-spin>
-                  </n-gi>
-                  <n-gi style="position: fixed;bottom:0;z-index: 9;width: 100%;">
-                    <n-card size="small" style="--wails-draggable:no-drag">
-                      <n-menu style="font-size: 18px;"
-                              v-model:value="activeKey"
-                              mode="horizontal"
-                              :options="menuOptions"
-                              :dropdown-props="{ menuProps: () => ({ style: 'max-height: 60vh; overflow-y: auto;' }) }"
-                              responsive
-                      />
-                    </n-card>
-                  </n-gi>
-                </n-grid>
-              </n-flex>
+                  </section>
+                </main>
+              </div>
             </n-watermark>
           </n-dialog-provider>
         </n-modal-provider>
@@ -1324,5 +1432,175 @@ onMounted(() => {
   </n-config-provider>
 </template>
 <style>
+:root {
+  --sidebar-width: 236px;
+  --sidebar-collapsed-width: 76px;
+  --header-height: 70px;
+}
 
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: var(--n-color, #f5f7fa);
+}
+
+.app-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  display: flex;
+  width: var(--sidebar-width);
+  flex-direction: column;
+  border-right: 1px solid rgba(128, 128, 128, 0.18);
+  background: var(--n-color, #fff);
+  transition: width 180ms ease;
+  --wails-draggable: no-drag;
+}
+
+.sidebar-collapsed .app-sidebar {
+  width: var(--sidebar-collapsed-width);
+}
+
+.brand-block {
+  display: flex;
+  height: var(--header-height);
+  flex: 0 0 var(--header-height);
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.brand-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #18a058, #36ad6a);
+  box-shadow: 0 6px 18px rgba(24, 160, 88, 0.25);
+}
+
+.brand-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.brand-copy strong {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.brand-copy span,
+.page-subtitle {
+  color: #8b9098;
+  font-size: 12px;
+}
+
+.nav-section-label {
+  padding: 18px 22px 8px;
+  color: #9a9fa7;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.sidebar-scroll {
+  min-height: 0;
+  flex: 1;
+  padding: 0 8px 12px;
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  min-height: 58px;
+  padding: 8px;
+  border-top: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.sidebar-collapsed .sidebar-footer {
+  flex-wrap: wrap;
+}
+
+.app-main {
+  min-height: 100vh;
+  margin-left: var(--sidebar-width);
+  transition: margin-left 180ms ease;
+}
+
+.sidebar-collapsed .app-main {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.app-header {
+  position: fixed;
+  inset: 0 0 auto var(--sidebar-width);
+  z-index: 15;
+  display: flex;
+  height: var(--header-height);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.16);
+  background: color-mix(in srgb, var(--n-color, #fff) 92%, transparent);
+  backdrop-filter: blur(14px);
+  transition: left 180ms ease;
+  --wails-draggable: drag;
+}
+
+.sidebar-collapsed .app-header {
+  left: var(--sidebar-collapsed-width);
+}
+
+.header-leading,
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  --wails-draggable: no-drag;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.collapse-button {
+  border: 1px solid rgba(128, 128, 128, 0.18);
+}
+
+.app-content {
+  min-height: 100vh;
+  padding-top: var(--header-height);
+  overflow: hidden;
+}
+
+.app-content .n-scrollbar {
+  padding: 16px 18px 18px;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --sidebar-width: 210px;
+  }
+
+  .header-actions .n-button:last-child {
+    display: none;
+  }
+}
 </style>
