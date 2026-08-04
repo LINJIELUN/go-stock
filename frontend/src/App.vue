@@ -58,6 +58,7 @@ const telegraph = ref([])
 const groupList = ref([])
 const officialStatement= ref("")
 const marketStatus = ref('')
+const sidebarCollapsed = ref(false)
 let marketStatusTimer = null
 
 const investmentMottos = [
@@ -1293,31 +1294,42 @@ onMounted(() => {
             >
 <!--              <FloatingAiAssistant />-->
               <FloatingAgentAssistant />
-              <div class="app-shell">
-                <aside class="app-sidebar" aria-label="主功能导航">
+              <div class="app-shell" :class="{ 'is-dark': !!enableDarkTheme }">
+                <aside class="app-sidebar" :class="{ 'is-collapsed': sidebarCollapsed }" aria-label="主功能导航">
                   <div class="sidebar-brand">
                     <div class="brand-mark">G</div>
-                    <div class="brand-copy">
+                    <div v-show="!sidebarCollapsed" class="brand-copy">
                       <strong>go-stock</strong>
                       <span>智能投研工作台</span>
                     </div>
+                    <n-button class="collapse-button" quaternary circle size="small"
+                              :title="sidebarCollapsed ? '展开功能导航' : '收起功能导航'"
+                              @click="sidebarCollapsed = !sidebarCollapsed">
+                      <template #icon><n-icon><ReorderTwoOutline /></n-icon></template>
+                    </n-button>
                   </div>
 
                   <n-scrollbar class="sidebar-scroll">
                     <nav class="sidebar-nav">
                       <div class="nav-section">
-                        <div class="nav-section-title">行情与交易</div>
+                        <div v-show="!sidebarCollapsed" class="nav-section-title">行情与交易</div>
                         <n-menu
                             v-model:value="activeKey"
                             :options="businessMenuOptions"
+                            :collapsed="sidebarCollapsed"
+                            :collapsed-width="64"
+                            :collapsed-icon-size="22"
                             :indent="18"
                         />
                       </div>
                       <div class="nav-section">
-                        <div class="nav-section-title">智能助手</div>
+                        <div v-show="!sidebarCollapsed" class="nav-section-title">智能助手</div>
                         <n-menu
                             v-model:value="activeKey"
                             :options="intelligentMenuOptions"
+                            :collapsed="sidebarCollapsed"
+                            :collapsed-width="64"
+                            :collapsed-icon-size="22"
                             :indent="18"
                         />
                       </div>
@@ -1325,16 +1337,22 @@ onMounted(() => {
                   </n-scrollbar>
 
                   <div class="sidebar-footer">
-                    <div class="nav-section-title">系统</div>
+                    <div v-show="!sidebarCollapsed" class="nav-section-title">系统</div>
                     <n-menu
                         v-model:value="activeKey"
                         :options="systemMenuOptions"
+                        :collapsed="sidebarCollapsed"
+                        :collapsed-width="64"
+                        :collapsed-icon-size="22"
                         :indent="18"
                     />
                     <n-divider class="sidebar-divider" />
                     <n-menu
                         v-model:value="activeKey"
                         :options="windowMenuOptions"
+                        :collapsed="sidebarCollapsed"
+                        :collapsed-width="64"
+                        :collapsed-icon-size="22"
                         :indent="18"
                     />
                   </div>
@@ -1381,18 +1399,38 @@ onMounted(() => {
   text-align: left;
 }
 
+.app-shell.is-dark {
+  --shell-surface: #18181c;
+  --shell-background: #101014;
+  --shell-border: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.82);
+  background: var(--shell-background);
+}
+
 .app-sidebar {
   position: relative;
   z-index: 20;
   display: flex;
   flex: 0 0 232px;
   flex-direction: column;
+  min-width: 0;
   height: 100vh;
   box-sizing: border-box;
   border-right: 1px solid var(--n-border-color, #e5e7eb);
   background: var(--n-card-color, #fff);
   box-shadow: 6px 0 24px rgba(15, 23, 42, 0.04);
   --wails-draggable: no-drag;
+  transition: flex-basis 0.2s ease;
+}
+
+.app-sidebar.is-collapsed {
+  flex-basis: 64px;
+}
+
+.is-dark .app-sidebar,
+.is-dark .sidebar-footer {
+  border-color: var(--shell-border);
+  background: var(--shell-surface);
 }
 
 .sidebar-brand {
@@ -1403,6 +1441,24 @@ onMounted(() => {
   padding: 0 18px;
   border-bottom: 1px solid var(--n-border-color, #eef0f2);
   --wails-draggable: drag;
+}
+
+.collapse-button {
+  margin-left: auto;
+  --wails-draggable: no-drag;
+}
+
+.is-collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.is-collapsed .brand-mark {
+  display: none;
+}
+
+.is-collapsed .collapse-button {
+  margin-left: 0;
 }
 
 .brand-mark {
@@ -1443,6 +1499,12 @@ onMounted(() => {
 
 .sidebar-nav {
   padding: 12px 10px;
+}
+
+.is-collapsed .sidebar-nav,
+.is-collapsed .sidebar-footer {
+  padding-right: 0;
+  padding-left: 0;
 }
 
 .nav-section + .nav-section {
