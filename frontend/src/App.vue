@@ -45,7 +45,6 @@ const router = useRouter()
 const loading = ref(true)
 const loadingMsg = ref("加载数据中...")
 const enableNews = ref(false)
-const contentStyle = ref("")
 const enableFund = ref(false)
 const enableAgent = ref(false)
 const enableDarkTheme = ref(darkTheme)
@@ -1226,7 +1225,6 @@ onMounted(() => {
     refreshMotto()
     updateMarketStatus()
   }, 60000)
-  contentStyle.value = "height: 100vh;overflow: hidden"
   GetConfig().then((res) => {
     if (res.enableNews) {
       enableNews.value = true
@@ -1297,10 +1295,10 @@ onMounted(() => {
               <div class="app-shell" :class="{ 'is-dark': !!enableDarkTheme }">
                 <aside class="app-sidebar" :class="{ 'is-collapsed': sidebarCollapsed }" aria-label="主功能导航">
                   <div class="sidebar-brand">
-                    <div class="brand-mark">G</div>
+                    <div class="brand-mark">杰</div>
                     <div v-show="!sidebarCollapsed" class="brand-copy">
-                      <strong>go-stock</strong>
-                      <span>智能投研工作台</span>
+                      <strong>杰伦股市分析</strong>
+                      <span>智能投资研究工作台</span>
                     </div>
                     <n-button class="collapse-button" quaternary circle size="small"
                               :title="sidebarCollapsed ? '展开功能导航' : '收起功能导航'"
@@ -1368,13 +1366,13 @@ onMounted(() => {
                       <template #description>
                         {{ loadingMsg }}
                       </template>
-                      <n-marquee :speed="100" style="position: relative;top:0;z-index: 19;width: 100%"
+                      <n-marquee class="workspace-marquee" :speed="100"
                                  v-if="(telegraph.length>0)&&(enableNews)">
                         <n-tag type="warning" v-for="item in telegraph" style="margin-right: 10px">
                           {{ item }}
                         </n-tag>
                       </n-marquee>
-                      <n-scrollbar :style="contentStyle">
+                      <n-scrollbar class="workspace-scroll">
                         <n-skeleton v-if="loading" height="calc(100vh)" />
                         <RouterView/>
                       </n-scrollbar>
@@ -1391,11 +1389,14 @@ onMounted(() => {
 </template>
 <style scoped>
 .app-shell {
+  --shell-surface: #fff;
+  --shell-background: #f4f6f8;
+  --shell-border: #e5e7eb;
   display: flex;
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: var(--n-color, #f4f6f8);
+  background: var(--shell-background);
   text-align: left;
 }
 
@@ -1416,8 +1417,8 @@ onMounted(() => {
   min-width: 0;
   height: 100vh;
   box-sizing: border-box;
-  border-right: 1px solid var(--n-border-color, #e5e7eb);
-  background: var(--n-card-color, #fff);
+  border-right: 1px solid var(--shell-border);
+  background: var(--shell-surface);
   box-shadow: 6px 0 24px rgba(15, 23, 42, 0.04);
   --wails-draggable: no-drag;
   transition: flex-basis 0.2s ease;
@@ -1580,6 +1581,25 @@ onMounted(() => {
 .workspace-content,
 .workspace-content :deep(.n-spin-container) {
   height: 100%;
+}
+
+.workspace-content :deep(.n-spin-content) {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+}
+
+.workspace-marquee {
+  position: relative;
+  z-index: 19;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.workspace-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 @media (max-width: 900px) {
