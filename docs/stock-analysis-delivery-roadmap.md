@@ -1,5 +1,9 @@
 # 可用股票分析软件交付路线图
 
+> TradingAgents 的阶段性集成边界、模型选择原则和验证闸门见
+> [TradingAgents 集成决策](./tradingagents-integration-decision.md)。行情预算上限和字段降级原则见
+> [A 股行情源与 AI 成本初步评估](./market-data-and-ai-cost-assessment.md)。
+
 ## 1. 先纠正目标定义
 
 “形式不限”并不等于桌面端、Web 端和移动端可以同时推进。当前项目是 Wails 桌面应用，主前端通过 Wails 绑定直接调用 Go 方法；将它直接放到静态托管平台并不会自动变成 Web 应用。若当前核心目标是尽快获得一个**可以持续使用**的股票分析软件，第一选择应是修复并交付现有桌面端，而不是先做 Netlify 改造。
