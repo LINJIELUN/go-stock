@@ -1,0 +1,34 @@
+package models
+
+import (
+	"testing"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+)
+
+func TestAIRecommendationModelsMigrateWithRequiredIndexes(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := []any{
+		&AIRecommendationSnapshot{},
+		&AIRecommendationFavorite{},
+		&AIRecommendationReview{},
+	}
+	if err := database.AutoMigrate(models...); err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range models {
+		if !database.Migrator().HasTable(model) {
+			t.Fatalf("missing migrated table for %T", model)
+		}
+	}
+	if !database.Migrator().HasIndex(&AIRecommendationFavorite{}, "idx_ai_recommendation_favorites_recommendation_id") {
+		t.Fatal("favorite recommendation unique index was not created")
+	}
+	if !database.Migrator().HasIndex(&AIRecommendationReview{}, "idx_ai_recommendation_reviews_recommendation_id") {
+		t.Fatal("review recommendation unique index was not created")
+	}
+}

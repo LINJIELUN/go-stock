@@ -1130,6 +1130,67 @@ type AiRecommendStocksPageData struct {
 	TotalPages int                 `json:"totalPages"`
 }
 
+// AIRecommendationSnapshot is an immutable, versioned prediction record used by both
+// scheduled and manual analysis. Re-analysis creates another snapshot instead of updating one.
+type AIRecommendationSnapshot struct {
+	gorm.Model
+	SourceType            string    `json:"sourceType" gorm:"size:20;not null;index"`
+	StockCode             string    `json:"stockCode" gorm:"size:20;not null;index"`
+	StockName             string    `json:"stockName" gorm:"size:80;not null"`
+	RiskLabelsJSON        string    `json:"riskLabelsJson" gorm:"type:text;not null;default:'[]'"`
+	CompletedAt           time.Time `json:"completedAt" gorm:"not null;index"`
+	DataAsOf              time.Time `json:"dataAsOf" gorm:"not null"`
+	BaselinePrice         float64   `json:"baselinePrice" gorm:"not null"`
+	BaselineMarketTime    time.Time `json:"baselineMarketTime" gorm:"not null"`
+	RiseProbability       float64   `json:"riseProbability" gorm:"not null"`
+	ReturnRangeLow        float64   `json:"returnRangeLow" gorm:"not null"`
+	ReturnRangeHigh       float64   `json:"returnRangeHigh" gorm:"not null"`
+	AIRecommendationIndex int       `json:"aiRecommendationIndex" gorm:"not null;index"`
+	ScoreComponentsJSON   string    `json:"scoreComponentsJson" gorm:"type:text;not null"`
+	PenaltiesJSON         string    `json:"penaltiesJson" gorm:"type:text;not null;default:'[]'"`
+	Rationale             string    `json:"rationale" gorm:"type:text"`
+	RiskNotes             string    `json:"riskNotes" gorm:"type:text"`
+	ModelVersion          string    `json:"modelVersion" gorm:"size:100;not null"`
+	StrategyVersion       string    `json:"strategyVersion" gorm:"size:100;not null;index"`
+	ReviewDueDate         time.Time `json:"reviewDueDate" gorm:"type:date;not null;index"`
+	Status                string    `json:"status" gorm:"size:30;not null;index"`
+	SupersedesID          *uint     `json:"supersedesId" gorm:"index"`
+}
+
+func (AIRecommendationSnapshot) TableName() string { return "ai_recommendation_snapshots" }
+
+// AIRecommendationFavorite keeps the relationship even when a user removes a favorite,
+// preserving the associated prediction and review history for later auditing.
+type AIRecommendationFavorite struct {
+	gorm.Model
+	RecommendationID uint       `json:"recommendationId" gorm:"not null;uniqueIndex"`
+	IsFavorite       bool       `json:"isFavorite" gorm:"not null;default:true;index"`
+	FavoritedAt      time.Time  `json:"favoritedAt" gorm:"not null"`
+	UnfavoritedAt    *time.Time `json:"unfavoritedAt"`
+}
+
+func (AIRecommendationFavorite) TableName() string { return "ai_recommendation_favorites" }
+
+// AIRecommendationReview stores the eventual seven-trading-day outcome. A suspended stock
+// remains pending until the first valid close after resumption and records both dates.
+type AIRecommendationReview struct {
+	gorm.Model
+	RecommendationID      uint       `json:"recommendationId" gorm:"not null;uniqueIndex"`
+	OriginalDueDate       time.Time  `json:"originalDueDate" gorm:"type:date;not null;index"`
+	ActualReviewDate      *time.Time `json:"actualReviewDate" gorm:"type:date"`
+	ActualClosePrice      *float64   `json:"actualClosePrice"`
+	ActualReturnPercent   *float64   `json:"actualReturnPercent"`
+	DirectionHit          *bool      `json:"directionHit"`
+	RangeHit              *bool      `json:"rangeHit"`
+	OutsideRangeDeviation *float64   `json:"outsideRangeDeviation"`
+	MarketTime            *time.Time `json:"marketTime"`
+	DataSource            string     `json:"dataSource" gorm:"size:80"`
+	Status                string     `json:"status" gorm:"size:30;not null;index"`
+	DelayReason           string     `json:"delayReason" gorm:"size:200"`
+}
+
+func (AIRecommendationReview) TableName() string { return "ai_recommendation_reviews" }
+
 // StockFinancialInfoResp
 type StockFinancialInfoResp struct {
 	Version string `json:"version"`
