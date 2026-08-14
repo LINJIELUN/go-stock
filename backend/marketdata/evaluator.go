@@ -60,16 +60,6 @@ func NewEvaluator(provider QuoteProvider) (*Evaluator, error) {
 func (e *Evaluator) Evaluate(ctx context.Context, requested []Instrument, maximumAge, maximumClockSkew time.Duration) BatchReport {
 	started := e.now()
 	report := BatchReport{Provider: e.provider.Name(), StartedAt: started, Requested: len(requested)}
-	quotes, err := e.provider.Quotes(ctx, requested)
-	finished := e.now()
-	report.FinishedAt = finished
-	report.RequestDuration = finished.Sub(started)
-	if err != nil {
-		report.Issues = append(report.Issues, ConformanceIssue{Code: IssueProviderError, Message: err.Error()})
-		return report
-	}
-	report.Returned = len(quotes)
-
 	wanted := make(map[string]struct{}, len(requested))
 	for _, instrument := range requested {
 		code := instrument.CanonicalCode()
@@ -83,6 +73,24 @@ func (e *Evaluator) Evaluate(ctx context.Context, requested []Instrument, maximu
 		}
 		wanted[code] = struct{}{}
 	}
+	if len(requested) == 0 {
+		report.Issues = append(report.Issues, ConformanceIssue{Code: IssueInvalidRequest, Message: "at least one instrument is required"})
+	}
+	if len(report.Issues) > 0 {
+		report.FinishedAt = e.now()
+		report.RequestDuration = report.FinishedAt.Sub(started)
+		return report
+	}
+	quotes, err := e.provider.Quotes(ctx, requested)
+	finished := e.now()
+	report.FinishedAt = finished
+	report.RequestDuration = finished.Sub(started)
+	if err != nil {
+		report.Issues = append(report.Issues, ConformanceIssue{Code: IssueProviderError, Message: err.Error()})
+		return report
+	}
+	report.Returned = len(quotes)
+
 	seen := make(map[string]int, len(quotes))
 	for _, quote := range quotes {
 		code := quote.Instrument.CanonicalCode()

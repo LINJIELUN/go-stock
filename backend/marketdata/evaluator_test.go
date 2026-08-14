@@ -61,10 +61,31 @@ func TestEvaluatorKeepsProviderFailureObservable(t *testing.T) {
 	}
 	now := time.Now()
 	evaluator.now = func() time.Time { return now }
-	report := evaluator.Evaluate(context.Background(), nil, 5*time.Second, time.Second)
+	instrument, _ := NormalizeInstrument("600519.SH", SecurityStock)
+	report := evaluator.Evaluate(context.Background(), []Instrument{instrument}, 5*time.Second, time.Second)
 	if len(report.Issues) != 1 || report.Issues[0].Code != IssueProviderError || report.Passed() {
 		t.Fatalf("provider failure was hidden: %+v", report)
 	}
+}
+
+func TestEvaluatorRejectsInvalidRequestBeforeProviderCall(t *testing.T) {
+	provider := &countingProvider{name: "must-not-run"}
+	evaluator, _ := NewEvaluator(provider)
+	report := evaluator.Evaluate(context.Background(), nil, time.Second, time.Second)
+	if provider.calls != 0 || len(report.Issues) != 1 || report.Issues[0].Code != IssueInvalidRequest {
+		t.Fatalf("invalid request reached provider: calls=%d report=%+v", provider.calls, report)
+	}
+}
+
+type countingProvider struct {
+	name  string
+	calls int
+}
+
+func (p *countingProvider) Name() string { return p.name }
+func (p *countingProvider) Quotes(context.Context, []Instrument) ([]Quote, error) {
+	p.calls++
+	return nil, nil
 }
 
 func TestAggregateCalculatesNearestRankPercentilesAndMissingRate(t *testing.T) {
