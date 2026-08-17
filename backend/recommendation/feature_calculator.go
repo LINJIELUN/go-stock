@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"go-stock/backend/marketdata"
@@ -57,6 +58,9 @@ func BuildScreeningRecord(identity ScreeningIdentity, bars []marketdata.DailyBar
 		}
 	}
 	last := len(ordered) - 1
+	if strings.SplitN(identity.StockCode, ".", 2)[0] != ordered[0].Instrument.Code {
+		return ScreeningRecord{}, errors.New("screening identity does not match daily bars")
+	}
 	if ordered[last].TradeDate.After(validatedAt) || ordered[last].TradeDate.After(asOf) {
 		return ScreeningRecord{}, errors.New("screening bars extend beyond the evidence cutoff")
 	}
