@@ -20,6 +20,11 @@ type DailyBarProvider interface {
 	DailyBars(context.Context, Instrument, time.Time, time.Time, Adjustment) ([]DailyBar, error)
 }
 
+type TradeCalendarProvider interface {
+	Name() string
+	TradingDates(context.Context, Exchange, time.Time, time.Time) ([]time.Time, error)
+}
+
 type TushareClient struct {
 	endpoint   *url.URL
 	token      string
@@ -42,6 +47,105 @@ func NewTushareClient(endpoint, token string, client *http.Client) (*TushareClie
 }
 
 func (c *TushareClient) Name() string { return TushareProviderName }
+
+func (c *TushareClient) TradingDates(ctx context.Context, exchange Exchange, start, end time.Time) ([]time.Time, error) {
+	if start.IsZero() || end.IsZero() || start.After(end) {
+		return nil, errors.New("trading-calendar date range is invalid")
+	}
+	exchangeCode := ""
+	switch exchange {
+	case ExchangeShanghai:
+		exchangeCode = "SSE"
+	case ExchangeShenzhen:
+		exchangeCode = "SZSE"
+	case ExchangeBeijing:
+		return nil, errors.New("TuShare trade_cal documentation does not confirm BSE calendar support")
+	default:
+		return nil, errors.New("TuShare calendar adapter received an unsupported exchange")
+	}
+	payload := struct {
+		APIName string         `json:"api_name"`
+		Token   string         `json:"token"`
+		Params  map[string]any `json:"params"`
+		Fields  string         `json:"fields"`
+	}{
+		APIName: "trade_cal", Token: c.token,
+		Params: map[string]any{"exchange": exchangeCode, "start_date": start.Format("20060102"), "end_date": end.Format("20060102")},
+		Fields: "exchange,cal_date,is_open,pretrade_date",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint.String(), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("request TuShare trade_cal: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request TuShare trade_cal: HTTP %d", response.StatusCode)
+	}
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"msg"`
+		Data    struct {
+			Fields []string `json:"fields"`
+			Items  [][]any  `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode TuShare trade_cal response: %w", err)
+	}
+	if result.Code != 0 {
+		return nil, fmt.Errorf("TuShare trade_cal error %d: %s", result.Code, result.Message)
+	}
+	columns, err := calendarColumns(result.Data.Fields)
+	if err != nil {
+		return nil, err
+	}
+	startDate, endDate := dateOnly(start), dateOnly(end)
+	seen := make(map[string]struct{}, len(result.Data.Items))
+	openDates := make([]time.Time, 0, len(result.Data.Items))
+	for rowIndex, item := range result.Data.Items {
+		if len(item) < len(result.Data.Fields) {
+			return nil, fmt.Errorf("TuShare trade_cal row %d has missing values", rowIndex)
+		}
+		returnedExchange, ok := item[columns["exchange"]].(string)
+		if !ok || returnedExchange != exchangeCode {
+			return nil, fmt.Errorf("TuShare trade_cal row %d returned exchange %q, expected %q", rowIndex, returnedExchange, exchangeCode)
+		}
+		dateText, ok := item[columns["cal_date"]].(string)
+		if !ok {
+			return nil, fmt.Errorf("TuShare trade_cal row %d has invalid cal_date", rowIndex)
+		}
+		date, err := time.Parse("20060102", dateText)
+		if err != nil || date.Before(startDate) || date.After(endDate) {
+			return nil, fmt.Errorf("TuShare trade_cal row %d has invalid or out-of-range date %q", rowIndex, dateText)
+		}
+		if _, duplicate := seen[dateText]; duplicate {
+			return nil, fmt.Errorf("TuShare trade_cal returned duplicate date %s", dateText)
+		}
+		seen[dateText] = struct{}{}
+		isOpen, ok := item[columns["is_open"]].(float64)
+		if !ok || (isOpen != 0 && isOpen != 1) {
+			return nil, fmt.Errorf("TuShare trade_cal row %d has invalid is_open", rowIndex)
+		}
+		if isOpen == 1 {
+			openDates = append(openDates, date)
+		}
+	}
+	expectedNaturalDays := int(endDate.Sub(startDate).Hours()/24) + 1
+	if len(seen) != expectedNaturalDays {
+		return nil, fmt.Errorf("TuShare trade_cal returned %d calendar days, expected %d", len(seen), expectedNaturalDays)
+	}
+	sort.Slice(openDates, func(i, j int) bool { return openDates[i].Before(openDates[j]) })
+	return openDates, nil
+}
 
 func (c *TushareClient) DailyBars(ctx context.Context, instrument Instrument, start, end time.Time, adjustment Adjustment) ([]DailyBar, error) {
 	if adjustment != AdjustmentNone {
@@ -155,6 +259,19 @@ func requiredColumns(fields []string) (map[string]int, error) {
 	for _, field := range []string{"ts_code", "trade_date", "open", "high", "low", "close", "vol", "amount"} {
 		if _, exists := columns[field]; !exists {
 			return nil, fmt.Errorf("TuShare response is missing required field %q", field)
+		}
+	}
+	return columns, nil
+}
+
+func calendarColumns(fields []string) (map[string]int, error) {
+	columns := make(map[string]int, len(fields))
+	for index, field := range fields {
+		columns[field] = index
+	}
+	for _, field := range []string{"exchange", "cal_date", "is_open"} {
+		if _, exists := columns[field]; !exists {
+			return nil, fmt.Errorf("TuShare trade_cal response is missing required field %q", field)
 		}
 	}
 	return columns, nil

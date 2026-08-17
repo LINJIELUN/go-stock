@@ -95,3 +95,55 @@ func TestTushareClientRejectsUnsafeConfigurationAndUnsupportedAdjustment(t *test
 		t.Fatal("expected unsupported adjustment rejection")
 	}
 }
+
+func TestTushareTradingDatesRequiresCompleteNaturalDateCoverage(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var payload struct {
+			APIName string         `json:"api_name"`
+			Params  map[string]any `json:"params"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.APIName != "trade_cal" || payload.Params["exchange"] != "SSE" {
+			t.Fatalf("unexpected calendar request: %+v", payload)
+		}
+		_, _ = writer.Write([]byte(`{
+			"code":0,"msg":null,"data":{
+			"fields":["exchange","cal_date","is_open","pretrade_date"],
+			"items":[["SSE","20260814",1,"20260813"],["SSE","20260815",0,"20260814"],["SSE","20260816",0,"20260814"]]}}
+		`))
+	}))
+	defer server.Close()
+	client, _ := NewTushareClient(server.URL, "token", server.Client())
+	start := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	dates, err := client.TradingDates(context.Background(), ExchangeShanghai, start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dates) != 1 || dates[0].Format(time.DateOnly) != "2026-08-14" {
+		t.Fatalf("unexpected open dates: %+v", dates)
+	}
+}
+
+func TestTushareTradingDatesRejectsIncompleteResponseAndUnconfirmedBSE(t *testing.T) {
+	calls := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = writer.Write([]byte(`{"code":0,"data":{"fields":["exchange","cal_date","is_open"],"items":[["SZSE","20260814",1]]}}`))
+	}))
+	defer server.Close()
+	client, _ := NewTushareClient(server.URL, "token", server.Client())
+	start := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
+	if _, err := client.TradingDates(context.Background(), ExchangeShenzhen, start, end); err == nil {
+		t.Fatal("expected incomplete natural-date response rejection")
+	}
+	if _, err := client.TradingDates(context.Background(), ExchangeBeijing, start, end); err == nil {
+		t.Fatal("expected undocumented BSE calendar support rejection")
+	}
+	if calls != 1 {
+		t.Fatalf("BSE rejection unexpectedly called provider: %d", calls)
+	}
+}
