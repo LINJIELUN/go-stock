@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"go-stock/backend/models"
@@ -37,6 +38,9 @@ func (s *Store) CreateSnapshot(snapshot *models.AIRecommendationSnapshot) error 
 		return err
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := requireValidationBatch(tx, snapshot); err != nil {
+			return err
+		}
 		if err := tx.Create(snapshot).Error; err != nil {
 			return fmt.Errorf("create recommendation snapshot: %w", err)
 		}
@@ -50,6 +54,26 @@ func (s *Store) CreateSnapshot(snapshot *models.AIRecommendationSnapshot) error 
 		}
 		return nil
 	})
+}
+
+func requireValidationBatch(tx *gorm.DB, snapshot *models.AIRecommendationSnapshot) error {
+	var batch models.MarketDataValidationBatch
+	if err := tx.First(&batch, snapshot.ValidationBatchID).Error; err != nil {
+		return fmt.Errorf("load market data validation batch: %w", err)
+	}
+	if batch.Status != "passed" || batch.ExpectedDates <= 0 || batch.ReleasedBars != batch.ExpectedDates {
+		return errors.New("market data validation batch is not approved for recommendation analysis")
+	}
+	batchCode := strings.SplitN(batch.InstrumentCode, ".", 2)[0]
+	snapshotCode := strings.SplitN(snapshot.StockCode, ".", 2)[0]
+	if batchCode == "" || batchCode != snapshotCode {
+		return errors.New("market data validation batch does not match recommendation stock")
+	}
+	dataDate := snapshot.DataAsOf.Format(time.DateOnly)
+	if dataDate < batch.RangeStart.Format(time.DateOnly) || dataDate > batch.RangeEnd.Format(time.DateOnly) {
+		return errors.New("recommendation data time is outside validation batch range")
+	}
+	return nil
 }
 
 // SetFavorite toggles the relationship without deleting the recommendation history.
@@ -103,6 +127,9 @@ func validateSnapshot(snapshot *models.AIRecommendationSnapshot) error {
 	}
 	if snapshot.SourceType != SourceAutomatic && snapshot.SourceType != SourceManual {
 		return errors.New("source type must be automatic or manual")
+	}
+	if snapshot.ValidationBatchID == 0 {
+		return errors.New("validated market data batch is required")
 	}
 	if snapshot.StockCode == "" || snapshot.StockName == "" {
 		return errors.New("stock code and name are required")

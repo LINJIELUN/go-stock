@@ -1134,7 +1134,8 @@ type AiRecommendStocksPageData struct {
 // scheduled and manual analysis. Re-analysis creates another snapshot instead of updating one.
 type AIRecommendationSnapshot struct {
 	gorm.Model
-	SourceType            string    `json:"sourceType" gorm:"size:20;not null;index"`
+	SourceType            string    `json:"sourceType" gorm:"size:20;not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
+	ValidationBatchID     uint      `json:"validationBatchId" gorm:"not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
 	StockCode             string    `json:"stockCode" gorm:"size:20;not null;index"`
 	StockName             string    `json:"stockName" gorm:"size:80;not null"`
 	RiskLabelsJSON        string    `json:"riskLabelsJson" gorm:"type:text;not null;default:'[]'"`
@@ -1151,7 +1152,7 @@ type AIRecommendationSnapshot struct {
 	Rationale             string    `json:"rationale" gorm:"type:text"`
 	RiskNotes             string    `json:"riskNotes" gorm:"type:text"`
 	ModelVersion          string    `json:"modelVersion" gorm:"size:100;not null"`
-	StrategyVersion       string    `json:"strategyVersion" gorm:"size:100;not null;index"`
+	StrategyVersion       string    `json:"strategyVersion" gorm:"size:100;not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
 	ReviewDueDate         time.Time `json:"reviewDueDate" gorm:"type:date;not null;index"`
 	Status                string    `json:"status" gorm:"size:30;not null;index"`
 	SupersedesID          *uint     `json:"supersedesId" gorm:"index"`

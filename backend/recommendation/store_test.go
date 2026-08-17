@@ -16,7 +16,17 @@ func testStore(t *testing.T) (*Store, *gorm.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.AutoMigrate(&models.AIRecommendationSnapshot{}, &models.AIRecommendationFavorite{}, &models.AIRecommendationReview{}); err != nil {
+	if err := database.AutoMigrate(&models.MarketDataValidationBatch{}, &models.AIRecommendationSnapshot{}, &models.AIRecommendationFavorite{}, &models.AIRecommendationReview{}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	batch := models.MarketDataValidationBatch{
+		BatchKey: "test-validation-batch", InstrumentCode: "600000.SH", Exchange: "SH",
+		SecurityType: "stock", RangeStart: now.AddDate(0, 0, -30), RangeEnd: now.AddDate(0, 0, 30),
+		CalendarSource: "calendar", PrimarySource: "primary", ReferenceSource: "reference",
+		ValidatedAt: now, Status: "passed", ExpectedDates: 20, ReleasedBars: 20, ReconciliationJSON: `{}`,
+	}
+	if err := database.Create(&batch).Error; err != nil {
 		t.Fatal(err)
 	}
 	store, err := NewStore(database)
@@ -28,12 +38,42 @@ func testStore(t *testing.T) (*Store, *gorm.DB) {
 
 func validSnapshot(now time.Time) *models.AIRecommendationSnapshot {
 	return &models.AIRecommendationSnapshot{
-		SourceType: SourceManual, StockCode: "600000", StockName: "浦发银行",
+		SourceType: SourceManual, ValidationBatchID: 1, StockCode: "600000", StockName: "浦发银行",
 		RiskLabelsJSON: "[]", CompletedAt: now, DataAsOf: now, BaselinePrice: 10,
 		BaselineMarketTime: now, RiseProbability: 65, ReturnRangeLow: -2,
 		ReturnRangeHigh: 8, AIRecommendationIndex: 70, ScoreComponentsJSON: `{ "dataQuality": 80 }`,
 		PenaltiesJSON: "[]", ModelVersion: "test-model", StrategyVersion: StrategyVersion,
 		ReviewDueDate: now.AddDate(0, 0, 10), Status: "active",
+	}
+}
+
+func TestCreateSnapshotRejectsUnapprovedOrMismatchedValidation(t *testing.T) {
+	store, database := testStore(t)
+	now := time.Now().UTC()
+	snapshot := validSnapshot(now)
+	if err := database.Model(&models.MarketDataValidationBatch{}).Where("id = ?", snapshot.ValidationBatchID).Update("status", "failed").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateSnapshot(snapshot); err == nil {
+		t.Fatal("expected failed validation batch rejection")
+	}
+	if err := database.Model(&models.MarketDataValidationBatch{}).Where("id = ?", snapshot.ValidationBatchID).Updates(map[string]any{"status": "passed", "instrument_code": "000001.SZ"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateSnapshot(snapshot); err == nil {
+		t.Fatal("expected mismatched validation batch rejection")
+	}
+}
+
+func TestCreateSnapshotRejectsDuplicateBatchStrategyAndSource(t *testing.T) {
+	store, _ := testStore(t)
+	first := validSnapshot(time.Now().UTC())
+	if err := store.CreateSnapshot(first); err != nil {
+		t.Fatal(err)
+	}
+	duplicate := validSnapshot(first.CompletedAt.Add(time.Minute))
+	if err := store.CreateSnapshot(duplicate); err == nil {
+		t.Fatal("expected duplicate recommendation rejection")
 	}
 }
 
