@@ -1191,6 +1191,28 @@ type AIRecommendationReview struct {
 
 func (AIRecommendationReview) TableName() string { return "ai_recommendation_reviews" }
 
+// MarketDataValidationBatch is the immutable audit record for one end-of-day
+// dual-source validation run. AI jobs may consume only batches with status passed.
+type MarketDataValidationBatch struct {
+	gorm.Model
+	BatchKey           string    `json:"batchKey" gorm:"size:64;not null;uniqueIndex"`
+	InstrumentCode     string    `json:"instrumentCode" gorm:"size:20;not null;index"`
+	Exchange           string    `json:"exchange" gorm:"size:10;not null"`
+	SecurityType       string    `json:"securityType" gorm:"size:20;not null"`
+	RangeStart         time.Time `json:"rangeStart" gorm:"type:date;not null;index"`
+	RangeEnd           time.Time `json:"rangeEnd" gorm:"type:date;not null;index"`
+	CalendarSource     string    `json:"calendarSource" gorm:"size:80;not null"`
+	PrimarySource      string    `json:"primarySource" gorm:"size:80;not null"`
+	ReferenceSource    string    `json:"referenceSource" gorm:"size:80;not null"`
+	ValidatedAt        time.Time `json:"validatedAt" gorm:"not null;index"`
+	Status             string    `json:"status" gorm:"size:20;not null;index"`
+	ExpectedDates      int       `json:"expectedDates" gorm:"not null"`
+	ReleasedBars       int       `json:"releasedBars" gorm:"not null"`
+	ReconciliationJSON string    `json:"reconciliationJson" gorm:"type:text;not null"`
+}
+
+func (MarketDataValidationBatch) TableName() string { return "market_data_validation_batches" }
+
 // StockFinancialInfoResp
 type StockFinancialInfoResp struct {
 	Version string `json:"version"`
