@@ -17,6 +17,8 @@ func TestAIRecommendationModelsMigrateWithRequiredIndexes(t *testing.T) {
 		&AIRecommendationFavorite{},
 		&AIRecommendationReview{},
 		&MarketDataValidationBatch{},
+		&AIAnalysisRun{},
+		&AIAnalysisJob{},
 	}
 	if err := database.AutoMigrate(models...); err != nil {
 		t.Fatal(err)
@@ -37,5 +39,11 @@ func TestAIRecommendationModelsMigrateWithRequiredIndexes(t *testing.T) {
 	}
 	if !database.Migrator().HasIndex(&MarketDataValidationBatch{}, "idx_market_data_validation_batches_batch_key") {
 		t.Fatal("market data validation batch unique index was not created")
+	}
+	if !database.Migrator().HasIndex(&AIAnalysisRun{}, "idx_analysis_run_date_strategy") {
+		t.Fatal("analysis run date/strategy idempotency index was not created")
+	}
+	if !database.Migrator().HasIndex(&AIAnalysisJob{}, "idx_analysis_run_stock") {
+		t.Fatal("analysis run/stock unique index was not created")
 	}
 }

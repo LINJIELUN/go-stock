@@ -300,6 +300,8 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.AIRecommendationFavorite{})
 	db.Dao.AutoMigrate(&models.AIRecommendationReview{})
 	db.Dao.AutoMigrate(&models.MarketDataValidationBatch{})
+	db.Dao.AutoMigrate(&models.AIAnalysisRun{})
+	db.Dao.AutoMigrate(&models.AIAnalysisJob{})
 	db.Dao.AutoMigrate(&models.AllStockInfo{})
 	db.Dao.AutoMigrate(&models.CronTask{})
 	db.Dao.AutoMigrate(&models.AiAssistantSession{})

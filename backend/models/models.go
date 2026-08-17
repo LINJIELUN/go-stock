@@ -1214,6 +1214,40 @@ type MarketDataValidationBatch struct {
 
 func (MarketDataValidationBatch) TableName() string { return "market_data_validation_batches" }
 
+// AIAnalysisRun represents one resumable post-close recommendation cycle.
+type AIAnalysisRun struct {
+	gorm.Model
+	TradeDate       time.Time  `json:"tradeDate" gorm:"type:date;not null;uniqueIndex:idx_analysis_run_date_strategy"`
+	StrategyVersion string     `json:"strategyVersion" gorm:"size:100;not null;uniqueIndex:idx_analysis_run_date_strategy"`
+	Status          string     `json:"status" gorm:"size:20;not null;index"`
+	TotalJobs       int        `json:"totalJobs" gorm:"not null"`
+	CompletedJobs   int        `json:"completedJobs" gorm:"not null"`
+	FailedJobs      int        `json:"failedJobs" gorm:"not null"`
+	StartedAt       *time.Time `json:"startedAt"`
+	CompletedAt     *time.Time `json:"completedAt"`
+}
+
+func (AIAnalysisRun) TableName() string { return "ai_analysis_runs" }
+
+// AIAnalysisJob isolates each stock so one provider/model failure cannot lose
+// the progress of the rest of a post-close run.
+type AIAnalysisJob struct {
+	gorm.Model
+	RunID             uint       `json:"runId" gorm:"not null;index;uniqueIndex:idx_analysis_run_stock"`
+	StockCode         string     `json:"stockCode" gorm:"size:20;not null;uniqueIndex:idx_analysis_run_stock"`
+	StockName         string     `json:"stockName" gorm:"size:80;not null"`
+	ValidationBatchID uint       `json:"validationBatchId" gorm:"not null;index"`
+	Status            string     `json:"status" gorm:"size:20;not null;index"`
+	Attempts          int        `json:"attempts" gorm:"not null"`
+	MaxAttempts       int        `json:"maxAttempts" gorm:"not null"`
+	AvailableAt       time.Time  `json:"availableAt" gorm:"not null;index"`
+	LeaseExpiresAt    *time.Time `json:"leaseExpiresAt" gorm:"index"`
+	LastError         string     `json:"lastError" gorm:"size:500"`
+	RecommendationID  *uint      `json:"recommendationId" gorm:"index"`
+}
+
+func (AIAnalysisJob) TableName() string { return "ai_analysis_jobs" }
+
 // StockFinancialInfoResp
 type StockFinancialInfoResp struct {
 	Version string `json:"version"`
