@@ -32,6 +32,7 @@ type ProviderDeclaration struct {
 }
 
 type QualificationPolicy struct {
+	Purpose                      string
 	MaximumMonthlyCostUSD        float64
 	MaximumPollingInterval       time.Duration
 	MinimumSamples               int
@@ -41,6 +42,8 @@ type QualificationPolicy struct {
 	MaximumMainInflowMissingRate float64
 	RequireMainNetInflow         bool
 	MaximumVerificationAge       time.Duration
+	MinimumTradeDateCoverageRate float64
+	MaximumCloseMismatchRate     float64
 }
 
 type QualificationBlocker struct {
@@ -61,10 +64,12 @@ func Qualify(declaration ProviderDeclaration, report AggregateReport, policy Qua
 	add := func(code, message string) {
 		result.Blockers = append(result.Blockers, QualificationBlocker{Code: code, Message: message})
 	}
-	if now.IsZero() || policy.MaximumMonthlyCostUSD < 0 || policy.MaximumPollingInterval <= 0 ||
+	if now.IsZero() || policy.Purpose == "" || policy.MaximumMonthlyCostUSD < 0 || policy.MaximumPollingInterval <= 0 ||
 		policy.MinimumSamples <= 0 || policy.MinimumSuccessRate < 0 || policy.MinimumSuccessRate > 1 ||
 		policy.MaximumRequestDurationP95 < 0 || policy.MaximumMarketAgeP95 < 0 ||
 		policy.MaximumMainInflowMissingRate < 0 || policy.MaximumMainInflowMissingRate > 1 ||
+		policy.MinimumTradeDateCoverageRate < 0 || policy.MinimumTradeDateCoverageRate > 1 ||
+		policy.MaximumCloseMismatchRate < 0 || policy.MaximumCloseMismatchRate > 1 ||
 		policy.MaximumVerificationAge <= 0 {
 		add("invalid_policy", "qualification policy and evaluation time must be valid")
 	}
@@ -106,6 +111,12 @@ func Qualify(declaration ProviderDeclaration, report AggregateReport, policy Qua
 	if report.MarketAgeP95 > policy.MaximumMarketAgeP95 {
 		add("market_age", "measured quote-age P95 exceeds the acceptance threshold")
 	}
+	if report.TradeDateCoverageRate < policy.MinimumTradeDateCoverageRate {
+		add("trade_date_coverage", "verified trading-date coverage is below the acceptance threshold")
+	}
+	if report.CloseMismatchRate > policy.MaximumCloseMismatchRate {
+		add("close_accuracy", "reconciled close-price mismatch rate exceeds the acceptance threshold")
+	}
 	if policy.RequireMainNetInflow && report.MissingMainNetInflowRate > policy.MaximumMainInflowMissingRate {
 		add("main_net_inflow", "main-net-inflow missing rate exceeds the acceptance threshold")
 	}
@@ -120,10 +131,24 @@ func Qualify(declaration ProviderDeclaration, report AggregateReport, policy Qua
 }
 
 func DefaultQualificationPolicy() QualificationPolicy {
+	return DefaultEndOfDayQualificationPolicy()
+}
+
+func DefaultEndOfDayQualificationPolicy() QualificationPolicy {
 	return QualificationPolicy{
-		MaximumMonthlyCostUSD: MarketDataMonthlyBudgetUSD, MaximumPollingInterval: 5 * time.Second,
-		MinimumSamples: 1000, MinimumSuccessRate: 0.99, MaximumRequestDurationP95: 2 * time.Second,
-		MaximumMarketAgeP95: 5 * time.Second, MaximumMainInflowMissingRate: 0.01,
-		RequireMainNetInflow: true, MaximumVerificationAge: 30 * 24 * time.Hour,
+		Purpose: "end_of_day_analysis", MaximumMonthlyCostUSD: MarketDataMonthlyBudgetUSD,
+		MaximumPollingInterval: 24 * time.Hour, MinimumSamples: 100, MinimumSuccessRate: 0.99,
+		MaximumRequestDurationP95: 10 * time.Second, MaximumMarketAgeP95: 24 * time.Hour,
+		MaximumMainInflowMissingRate: 1, RequireMainNetInflow: false,
+		MaximumVerificationAge: 30 * 24 * time.Hour, MinimumTradeDateCoverageRate: 1,
+		MaximumCloseMismatchRate: 0,
 	}
+}
+
+func DefaultIntradayWatchlistPolicy() QualificationPolicy {
+	policy := DefaultEndOfDayQualificationPolicy()
+	policy.Purpose = "intraday_watchlist"
+	policy.MaximumPollingInterval = 5 * time.Minute
+	policy.MaximumMarketAgeP95 = 15 * time.Minute
+	return policy
 }

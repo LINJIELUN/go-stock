@@ -149,6 +149,8 @@ type AggregateReport struct {
 	MarketAgeP99             time.Duration
 	IssueCounts              map[IssueCode]int
 	MissingMainNetInflowRate float64
+	TradeDateCoverageRate    float64
+	CloseMismatchRate        float64
 }
 
 func Aggregate(reports []BatchReport) AggregateReport {

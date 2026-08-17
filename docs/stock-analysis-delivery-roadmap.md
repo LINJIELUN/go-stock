@@ -3,6 +3,8 @@
 > TradingAgents 的阶段性集成边界、模型选择原则和验证闸门见
 > [TradingAgents 集成决策](./tradingagents-integration-decision.md)。行情预算上限和字段降级原则见
 > [A 股行情源与 AI 成本初步评估](./market-data-and-ai-cost-assessment.md)。
+>
+> 2026-08-17 起产品改为[收盘后分析优先](./end-of-day-analysis-scope.md)；本文后续“接近实时”内容仅作为可选盘中能力，不再阻塞第一版 AI 推荐与复盘。
 
 ## 1. 先纠正目标定义
 

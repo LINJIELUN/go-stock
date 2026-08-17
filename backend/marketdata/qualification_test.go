@@ -15,7 +15,8 @@ func qualifiedInputs(now time.Time) (ProviderDeclaration, AggregateReport, Quali
 	report := AggregateReport{
 		Samples: 1000, PassedSamples: 995, SuccessRate: 0.995,
 		RequestDurationP95: time.Second, MarketAgeP95: 3 * time.Second,
-		MissingMainNetInflowRate: 0.005, IssueCounts: map[IssueCode]int{},
+		MissingMainNetInflowRate: 0.005, TradeDateCoverageRate: 1, CloseMismatchRate: 0,
+		IssueCounts: map[IssueCode]int{},
 	}
 	return declaration, report, DefaultQualificationPolicy()
 }
@@ -36,7 +37,7 @@ func TestQualifyFailsClosedForBudgetRightsCoverageAndEvidence(t *testing.T) {
 	declaration.DisplayRightsVerified = false
 	declaration.Coverage.BeijingStocks = false
 	declaration.PricingVerifiedAt = now.Add(-31 * 24 * time.Hour)
-	report.Samples = 999
+	report.Samples = 99
 	report.SuccessRate = 0.98
 	report.IssueCounts[IssueProviderMismatch] = 1
 	result := Qualify(declaration, report, policy, now)
@@ -62,6 +63,8 @@ func TestQualifyFailsClosedForBudgetRightsCoverageAndEvidence(t *testing.T) {
 func TestDefaultPolicyKeepsMainInflowAsExplicitGate(t *testing.T) {
 	now := time.Now().UTC()
 	declaration, report, policy := qualifiedInputs(now)
+	policy.RequireMainNetInflow = true
+	policy.MaximumMainInflowMissingRate = 0.01
 	report.MissingMainNetInflowRate = 1
 	result := Qualify(declaration, report, policy, now)
 	if result.Qualified || len(result.Blockers) != 1 || result.Blockers[0].Code != "main_net_inflow" {
@@ -70,6 +73,37 @@ func TestDefaultPolicyKeepsMainInflowAsExplicitGate(t *testing.T) {
 	policy.RequireMainNetInflow = false
 	if result = Qualify(declaration, report, policy, now); !result.Qualified {
 		t.Fatalf("optional main-inflow policy still blocked provider: %+v", result)
+	}
+}
+
+func TestDefaultPolicyPrioritizesEndOfDayAccuracy(t *testing.T) {
+	policy := DefaultQualificationPolicy()
+	if policy.Purpose != "end_of_day_analysis" || policy.RequireMainNetInflow ||
+		policy.MinimumTradeDateCoverageRate != 1 || policy.MaximumCloseMismatchRate != 0 {
+		t.Fatalf("unexpected end-of-day defaults: %+v", policy)
+	}
+	intraday := DefaultIntradayWatchlistPolicy()
+	if intraday.MaximumPollingInterval != 5*time.Minute || intraday.MaximumMarketAgeP95 != 15*time.Minute {
+		t.Fatalf("unexpected lower-frequency watchlist profile: %+v", intraday)
+	}
+}
+
+func TestQualifyBlocksIncompleteOrMismatchedCloseData(t *testing.T) {
+	now := time.Now().UTC()
+	declaration, report, policy := qualifiedInputs(now)
+	report.TradeDateCoverageRate = 0.99
+	report.CloseMismatchRate = 0.001
+	result := Qualify(declaration, report, policy, now)
+	want := map[string]bool{"trade_date_coverage": false, "close_accuracy": false}
+	for _, blocker := range result.Blockers {
+		if _, exists := want[blocker.Code]; exists {
+			want[blocker.Code] = true
+		}
+	}
+	for code, found := range want {
+		if !found {
+			t.Fatalf("missing %s blocker: %+v", code, result.Blockers)
+		}
 	}
 }
 
