@@ -168,31 +168,72 @@ func (s *JobStore) Complete(jobID, recommendationID uint, now time.Time) error {
 		return errors.New("job, recommendation, and completion time are required")
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		return completeJob(tx, jobID, recommendationID, now)
+	})
+}
+
+// CompleteWithSnapshot closes the crash window between persisting a model
+// result and marking its leased job complete.
+func (s *JobStore) CompleteWithSnapshot(jobID uint, snapshot *models.AIRecommendationSnapshot, now time.Time) error {
+	if jobID == 0 || now.IsZero() {
+		return errors.New("job and completion time are required")
+	}
+	if err := validateSnapshot(snapshot); err != nil {
+		return err
+	}
+	if snapshot.SourceType != SourceAutomatic {
+		return errors.New("post-close analysis job requires an automatic recommendation snapshot")
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		var job models.AIAnalysisJob
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&job, jobID).Error; err != nil {
+		if err := tx.First(&job, jobID).Error; err != nil {
 			return err
-		}
-		if job.Status == JobCompleted {
-			if job.RecommendationID != nil && *job.RecommendationID == recommendationID {
-				return nil
-			}
-			return errors.New("analysis job already completed with another recommendation")
 		}
 		if job.Status != JobRunning {
-			return errors.New("only a running analysis job can complete")
-		}
-		var snapshot models.AIRecommendationSnapshot
-		if err := tx.First(&snapshot, recommendationID).Error; err != nil {
-			return err
+			return errors.New("only a running analysis job can persist a result")
 		}
 		if snapshot.ValidationBatchID != job.ValidationBatchID || strings.SplitN(snapshot.StockCode, ".", 2)[0] != strings.SplitN(job.StockCode, ".", 2)[0] {
-			return errors.New("recommendation does not belong to analysis job evidence")
+			return errors.New("analysis result does not match leased job evidence")
 		}
-		if err := tx.Model(&job).Updates(map[string]any{"status": JobCompleted, "recommendation_id": recommendationID, "lease_expires_at": nil}).Error; err != nil {
+		if err := requireValidationBatch(tx, snapshot); err != nil {
 			return err
 		}
-		return refreshRun(tx, job.RunID, now)
+		if err := tx.Create(snapshot).Error; err != nil {
+			return fmt.Errorf("create recommendation snapshot: %w", err)
+		}
+		review := models.AIRecommendationReview{RecommendationID: snapshot.ID, OriginalDueDate: snapshot.ReviewDueDate, Status: StatusPending}
+		if err := tx.Create(&review).Error; err != nil {
+			return fmt.Errorf("create pending recommendation review: %w", err)
+		}
+		return completeJob(tx, jobID, snapshot.ID, now)
 	})
+}
+
+func completeJob(tx *gorm.DB, jobID, recommendationID uint, now time.Time) error {
+	var job models.AIAnalysisJob
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&job, jobID).Error; err != nil {
+		return err
+	}
+	if job.Status == JobCompleted {
+		if job.RecommendationID != nil && *job.RecommendationID == recommendationID {
+			return nil
+		}
+		return errors.New("analysis job already completed with another recommendation")
+	}
+	if job.Status != JobRunning {
+		return errors.New("only a running analysis job can complete")
+	}
+	var snapshot models.AIRecommendationSnapshot
+	if err := tx.First(&snapshot, recommendationID).Error; err != nil {
+		return err
+	}
+	if snapshot.ValidationBatchID != job.ValidationBatchID || strings.SplitN(snapshot.StockCode, ".", 2)[0] != strings.SplitN(job.StockCode, ".", 2)[0] {
+		return errors.New("recommendation does not belong to analysis job evidence")
+	}
+	if err := tx.Model(&job).Updates(map[string]any{"status": JobCompleted, "recommendation_id": recommendationID, "lease_expires_at": nil}).Error; err != nil {
+		return err
+	}
+	return refreshRun(tx, job.RunID, now)
 }
 
 func (s *JobStore) Fail(jobID uint, message string, retryAt, now time.Time) error {
