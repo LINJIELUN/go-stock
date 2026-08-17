@@ -24,6 +24,7 @@ type ScreeningRecord struct {
 	IsST              bool
 	IsNewStock        bool
 	IsDelistingPeriod bool
+	RawFeatures       *ScreeningRawFeatures
 }
 
 type ScreeningProvider interface {
@@ -49,13 +50,14 @@ func NewQuantitativeCandidateSource(provider ScreeningProvider, policy Screening
 }
 
 type screeningEvidence struct {
-	Version     string  `json:"version"`
-	Trend       float64 `json:"trend"`
-	Liquidity   float64 `json:"liquidity"`
-	RiskSafety  float64 `json:"riskSafety"`
-	DataQuality float64 `json:"dataQuality"`
-	IsST        bool    `json:"isST"`
-	IsNewStock  bool    `json:"isNewStock"`
+	Version     string                `json:"version"`
+	Trend       float64               `json:"trend"`
+	Liquidity   float64               `json:"liquidity"`
+	RiskSafety  float64               `json:"riskSafety"`
+	DataQuality float64               `json:"dataQuality"`
+	IsST        bool                  `json:"isST"`
+	IsNewStock  bool                  `json:"isNewStock"`
+	RawFeatures *ScreeningRawFeatures `json:"rawFeatures,omitempty"`
 }
 
 // Candidates performs a transparent, non-AI pre-screen. Its score ranks which
@@ -93,7 +95,7 @@ func (s *QuantitativeCandidateSource) Candidates(ctx context.Context, tradeDate 
 		}
 		score := round(0.35*record.Trend+0.25*record.Liquidity+0.25*record.RiskSafety+0.15*record.DataQuality, 4)
 		evidence, _ := json.Marshal(screeningEvidence{PreScreeningVersion, record.Trend, record.Liquidity,
-			record.RiskSafety, record.DataQuality, record.IsST, record.IsNewStock})
+			record.RiskSafety, record.DataQuality, record.IsST, record.IsNewStock, record.RawFeatures})
 		eligible = append(eligible, ranked{candidate: AnalysisCandidate{StockCode: code, StockName: strings.TrimSpace(record.StockName),
 			ValidationBatchID: record.ValidationBatchID, ScreeningScore: score, ScreeningJSON: string(evidence)}, score: score})
 	}
