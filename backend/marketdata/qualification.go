@@ -61,6 +61,13 @@ func Qualify(declaration ProviderDeclaration, report AggregateReport, policy Qua
 	add := func(code, message string) {
 		result.Blockers = append(result.Blockers, QualificationBlocker{Code: code, Message: message})
 	}
+	if now.IsZero() || policy.MaximumMonthlyCostUSD < 0 || policy.MaximumPollingInterval <= 0 ||
+		policy.MinimumSamples <= 0 || policy.MinimumSuccessRate < 0 || policy.MinimumSuccessRate > 1 ||
+		policy.MaximumRequestDurationP95 < 0 || policy.MaximumMarketAgeP95 < 0 ||
+		policy.MaximumMainInflowMissingRate < 0 || policy.MaximumMainInflowMissingRate > 1 ||
+		policy.MaximumVerificationAge <= 0 {
+		add("invalid_policy", "qualification policy and evaluation time must be valid")
+	}
 	if declaration.Name == "" {
 		add("missing_provider", "provider name is required")
 	}
@@ -73,10 +80,10 @@ func Qualify(declaration ProviderDeclaration, report AggregateReport, policy Qua
 	if !declaration.DisplayRightsVerified || declaration.TermsURL == "" {
 		add("display_rights", "desktop display rights and source terms are not verified")
 	}
-	if declaration.PricingVerifiedAt.IsZero() || now.Sub(declaration.PricingVerifiedAt) > policy.MaximumVerificationAge {
+	if declaration.PricingVerifiedAt.IsZero() || declaration.PricingVerifiedAt.After(now) || now.Sub(declaration.PricingVerifiedAt) > policy.MaximumVerificationAge {
 		add("stale_pricing", "pricing verification is missing or stale")
 	}
-	if declaration.TermsVerifiedAt.IsZero() || now.Sub(declaration.TermsVerifiedAt) > policy.MaximumVerificationAge {
+	if declaration.TermsVerifiedAt.IsZero() || declaration.TermsVerifiedAt.After(now) || now.Sub(declaration.TermsVerifiedAt) > policy.MaximumVerificationAge {
 		add("stale_terms", "terms verification is missing or stale")
 	}
 	if declaration.MinimumPollingInterval <= 0 || declaration.MinimumPollingInterval > policy.MaximumPollingInterval {

@@ -72,3 +72,22 @@ func TestDefaultPolicyKeepsMainInflowAsExplicitGate(t *testing.T) {
 		t.Fatalf("optional main-inflow policy still blocked provider: %+v", result)
 	}
 }
+
+func TestQualifyRejectsInvalidPolicyAndFutureEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	declaration, report, policy := qualifiedInputs(now)
+	declaration.TermsVerifiedAt = now.Add(time.Hour)
+	policy.MinimumSuccessRate = 2
+	result := Qualify(declaration, report, policy, now)
+	want := map[string]bool{"invalid_policy": false, "stale_terms": false}
+	for _, blocker := range result.Blockers {
+		if _, exists := want[blocker.Code]; exists {
+			want[blocker.Code] = true
+		}
+	}
+	for code, found := range want {
+		if !found {
+			t.Fatalf("missing %s blocker: %+v", code, result.Blockers)
+		}
+	}
+}
