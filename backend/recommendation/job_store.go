@@ -28,6 +28,8 @@ type AnalysisCandidate struct {
 	StockCode         string
 	StockName         string
 	ValidationBatchID uint
+	ScreeningScore    float64
+	ScreeningJSON     string
 }
 
 type JobStore struct{ db *gorm.DB }
@@ -72,7 +74,8 @@ func (s *JobStore) CreateRun(tradeDate time.Time, strategy string, candidates []
 			}
 			seen[code] = true
 			jobs = append(jobs, models.AIAnalysisJob{RunID: run.ID, StockCode: code, StockName: candidate.StockName,
-				ValidationBatchID: candidate.ValidationBatchID, Status: JobPending, MaxAttempts: maxAttempts, AvailableAt: now})
+				ValidationBatchID: candidate.ValidationBatchID, ScreeningScore: candidate.ScreeningScore, ScreeningJSON: candidate.ScreeningJSON,
+				Status: JobPending, MaxAttempts: maxAttempts, AvailableAt: now})
 		}
 		if err := tx.Create(&jobs).Error; err != nil {
 			return err
@@ -94,16 +97,22 @@ func verifyExistingCandidates(tx *gorm.DB, runID uint, candidates []AnalysisCand
 	if len(existing) != len(candidates) {
 		return errors.New("existing analysis run has a different candidate set")
 	}
-	wanted := make(map[string]uint, len(candidates))
+	type evidence struct {
+		batch uint
+		score float64
+		json  string
+	}
+	wanted := make(map[string]evidence, len(candidates))
 	for _, candidate := range candidates {
 		code := strings.TrimSpace(candidate.StockCode)
-		if code == "" || wanted[code] != 0 {
+		if _, duplicate := wanted[code]; code == "" || duplicate {
 			return errors.New("analysis candidate set is invalid or duplicated")
 		}
-		wanted[code] = candidate.ValidationBatchID
+		wanted[code] = evidence{candidate.ValidationBatchID, candidate.ScreeningScore, candidate.ScreeningJSON}
 	}
 	for _, job := range existing {
-		if wanted[job.StockCode] != job.ValidationBatchID {
+		item, ok := wanted[job.StockCode]
+		if !ok || item.batch != job.ValidationBatchID || item.score != job.ScreeningScore || item.json != job.ScreeningJSON {
 			return errors.New("existing analysis run has different validation evidence")
 		}
 	}
@@ -112,7 +121,8 @@ func verifyExistingCandidates(tx *gorm.DB, runID uint, candidates []AnalysisCand
 
 func validateCandidates(tx *gorm.DB, candidates []AnalysisCandidate) error {
 	for _, candidate := range candidates {
-		if strings.TrimSpace(candidate.StockCode) == "" || strings.TrimSpace(candidate.StockName) == "" || candidate.ValidationBatchID == 0 {
+		if strings.TrimSpace(candidate.StockCode) == "" || strings.TrimSpace(candidate.StockName) == "" || candidate.ValidationBatchID == 0 ||
+			!finite(candidate.ScreeningScore) || candidate.ScreeningScore < 0 || candidate.ScreeningScore > 100 || validJSONObject(candidate.ScreeningJSON) != nil {
 			return errors.New("every analysis candidate requires stock identity and validation batch")
 		}
 		var batch models.MarketDataValidationBatch

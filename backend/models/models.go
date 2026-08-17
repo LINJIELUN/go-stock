@@ -1237,6 +1237,8 @@ type AIAnalysisJob struct {
 	StockCode         string     `json:"stockCode" gorm:"size:20;not null;uniqueIndex:idx_analysis_run_stock"`
 	StockName         string     `json:"stockName" gorm:"size:80;not null"`
 	ValidationBatchID uint       `json:"validationBatchId" gorm:"not null;index"`
+	ScreeningScore    float64    `json:"screeningScore" gorm:"not null;index"`
+	ScreeningJSON     string     `json:"screeningJson" gorm:"type:text;not null"`
 	Status            string     `json:"status" gorm:"size:20;not null;index"`
 	Attempts          int        `json:"attempts" gorm:"not null"`
 	MaxAttempts       int        `json:"maxAttempts" gorm:"not null"`

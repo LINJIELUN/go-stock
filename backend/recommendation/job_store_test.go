@@ -23,7 +23,7 @@ func analysisJobStore(t *testing.T) (*JobStore, *Store, *gorm.DB) {
 }
 
 func testCandidate() AnalysisCandidate {
-	return AnalysisCandidate{StockCode: "600000", StockName: "浦发银行", ValidationBatchID: 1}
+	return AnalysisCandidate{StockCode: "600000", StockName: "浦发银行", ValidationBatchID: 1, ScreeningScore: 80, ScreeningJSON: `{}`}
 }
 
 func TestAnalysisRunCreationIsAtomicAndIdempotent(t *testing.T) {
