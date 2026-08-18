@@ -19,6 +19,7 @@ func TestAIRecommendationModelsMigrateWithRequiredIndexes(t *testing.T) {
 		&MarketDataValidationBatch{},
 		&AIAnalysisRun{},
 		&AIAnalysisJob{},
+		&AIModelUsage{},
 	}
 	if err := database.AutoMigrate(models...); err != nil {
 		t.Fatal(err)
@@ -45,5 +46,8 @@ func TestAIRecommendationModelsMigrateWithRequiredIndexes(t *testing.T) {
 	}
 	if !database.Migrator().HasIndex(&AIAnalysisJob{}, "idx_analysis_run_stock") {
 		t.Fatal("analysis run/stock unique index was not created")
+	}
+	if !database.Migrator().HasIndex(&AIModelUsage{}, "idx_ai_usage_job_attempt") {
+		t.Fatal("AI usage job/attempt unique index was not created")
 	}
 }

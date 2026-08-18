@@ -1250,6 +1250,24 @@ type AIAnalysisJob struct {
 
 func (AIAnalysisJob) TableName() string { return "ai_analysis_jobs" }
 
+// AIModelUsage records reserved and settled model spend for budget enforcement.
+type AIModelUsage struct {
+	gorm.Model
+	JobID            uint       `json:"jobId" gorm:"not null;index;uniqueIndex:idx_ai_usage_job_attempt"`
+	Attempt          int        `json:"attempt" gorm:"not null;uniqueIndex:idx_ai_usage_job_attempt"`
+	Provider         string     `json:"provider" gorm:"size:80;not null;index"`
+	ModelName        string     `json:"model" gorm:"size:120;not null;index"`
+	Status           string     `json:"status" gorm:"size:20;not null;index"`
+	EstimatedCostUSD float64    `json:"estimatedCostUsd" gorm:"not null"`
+	ActualCostUSD    *float64   `json:"actualCostUsd"`
+	InputTokens      int64      `json:"inputTokens" gorm:"not null"`
+	OutputTokens     int64      `json:"outputTokens" gorm:"not null"`
+	ReservedAt       time.Time  `json:"reservedAt" gorm:"not null;index"`
+	SettledAt        *time.Time `json:"settledAt"`
+}
+
+func (AIModelUsage) TableName() string { return "ai_model_usage" }
+
 // StockFinancialInfoResp
 type StockFinancialInfoResp struct {
 	Version string `json:"version"`
