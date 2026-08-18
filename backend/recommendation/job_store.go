@@ -274,6 +274,24 @@ func (s *JobStore) Fail(jobID uint, message string, retryAt, now time.Time) erro
 	})
 }
 
+// Defer returns a claimed job without consuming an attempt when no external
+// model request was made (for example, the monthly hard budget blocked it).
+func (s *JobStore) Defer(jobID uint, reason string, availableAt, now time.Time) error {
+	if jobID == 0 || strings.TrimSpace(reason) == "" || now.IsZero() || availableAt.Before(now) {
+		return errors.New("job, defer reason, current time, and future availability are required")
+	}
+	result := s.db.Model(&models.AIAnalysisJob{}).Where("id = ? AND status = ? AND attempts > 0", jobID, JobRunning).
+		Updates(map[string]any{"status": JobRetry, "attempts": gorm.Expr("attempts - 1"), "available_at": availableAt,
+			"lease_expires_at": nil, "last_error": strings.TrimSpace(reason)})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return errors.New("only a claimed analysis job can be deferred")
+	}
+	return nil
+}
+
 // RecoverExpired returns abandoned leases to the retry queue or exhausts them.
 func (s *JobStore) RecoverExpired(now time.Time) (int64, error) {
 	if now.IsZero() {

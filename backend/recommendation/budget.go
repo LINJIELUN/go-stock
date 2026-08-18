@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	UsageReserved = "reserved"
-	UsageSettled  = "settled"
-	UsageReleased = "released"
+	UsageReserved  = "reserved"
+	UsageSettled   = "settled"
+	UsageReleased  = "released"
+	UsageUncertain = "uncertain"
 )
 
 type BudgetPolicy struct {
@@ -62,8 +63,8 @@ func (s *BudgetStore) Reserve(jobID uint, attempt int, provider, model string, e
 		var existing models.AIModelUsage
 		err := tx.Where("job_id = ? AND attempt = ?", jobID, attempt).First(&existing).Error
 		if err == nil {
-			if existing.Provider != provider || existing.ModelName != model || existing.EstimatedCostUSD != estimateUSD || existing.Status == UsageReleased {
-				return errors.New("job attempt already has a different or released budget reservation")
+			if existing.Provider != provider || existing.ModelName != model || existing.EstimatedCostUSD != estimateUSD || existing.Status != UsageReserved {
+				return errors.New("job attempt already has a different or closed budget reservation")
 			}
 			committed, err := committedSpend(tx, now, s.policy.Location)
 			if err != nil {
@@ -138,12 +139,28 @@ func (s *BudgetStore) Release(usageID uint) error {
 	return nil
 }
 
+// MarkUncertain keeps the estimate committed when the provider may have
+// charged a request but authoritative usage is unavailable.
+func (s *BudgetStore) MarkUncertain(usageID uint) error {
+	if usageID == 0 {
+		return errors.New("usage id is required")
+	}
+	result := s.db.Model(&models.AIModelUsage{}).Where("id = ? AND status = ?", usageID, UsageReserved).Update("status", UsageUncertain)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return errors.New("only an active reservation can become uncertain")
+	}
+	return nil
+}
+
 func committedSpend(tx *gorm.DB, now time.Time, location *time.Location) (float64, error) {
 	local := now.In(location)
 	start := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, location)
 	end := start.AddDate(0, 1, 0)
 	var usages []models.AIModelUsage
-	if err := tx.Where("reserved_at >= ? AND reserved_at < ? AND status IN ?", start, end, []string{UsageReserved, UsageSettled}).Find(&usages).Error; err != nil {
+	if err := tx.Where("reserved_at >= ? AND reserved_at < ? AND status IN ?", start, end, []string{UsageReserved, UsageSettled, UsageUncertain}).Find(&usages).Error; err != nil {
 		return 0, err
 	}
 	total := 0.0

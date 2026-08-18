@@ -102,6 +102,12 @@ func (p *AnalysisProcessor) ProcessNext(ctx context.Context) (ProcessResult, err
 	}
 	finished := p.now()
 	if analyzeErr != nil {
+		if errors.Is(analyzeErr, ErrHardBudgetExceeded) {
+			if err := p.jobs.Defer(job.ID, analyzeErr.Error(), firstDayOfNextMonth(finished), finished); err != nil {
+				return ProcessResult{JobID: job.ID}, fmt.Errorf("defer budget-blocked analysis: %w", err)
+			}
+			return ProcessResult{JobID: job.ID, Status: JobRetry, AnalysisError: analyzeErr.Error()}, nil
+		}
 		if err := p.jobs.Fail(job.ID, analyzeErr.Error(), finished.Add(p.retryDelay), finished); err != nil {
 			return ProcessResult{JobID: job.ID}, fmt.Errorf("persist analysis failure: %w", err)
 		}
@@ -115,6 +121,10 @@ func (p *AnalysisProcessor) ProcessNext(ctx context.Context) (ProcessResult, err
 		return ProcessResult{JobID: job.ID}, fmt.Errorf("persist analysis result: %w", err)
 	}
 	return ProcessResult{JobID: job.ID, Status: JobCompleted, RecommendationID: snapshot.ID}, nil
+}
+
+func firstDayOfNextMonth(value time.Time) time.Time {
+	return time.Date(value.Year(), value.Month()+1, 1, 0, 0, 0, 0, value.Location())
 }
 
 func IsNoReadyJob(err error) bool { return errors.Is(err, gorm.ErrRecordNotFound) }
