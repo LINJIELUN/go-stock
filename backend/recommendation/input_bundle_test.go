@@ -111,3 +111,12 @@ func TestInputBundleStoreRejectsInvalidOHLCAndStaleBaseline(t *testing.T) {
 		t.Fatalf("expected stale baseline rejection: %v", err)
 	}
 }
+
+func TestInputBundleStoreRejectsEvidenceIDCollisionAcrossBarsAndFacts(t *testing.T) {
+	store, job, draft, _ := inputBundleFixture(t)
+	draft.News = append(draft.News, TimedAnalysisFact{ID: dailyBarEvidenceID(job.StockCode, draft.DailyBars[0].TradeDate),
+		Category: "news", Value: "冲突", Source: "exchange", PublishedAt: draft.DailyBars[0].TradeDate})
+	if _, err := store.Save(job, draft); err == nil || !strings.Contains(err.Error(), "unique across bars and facts") {
+		t.Fatalf("expected cross-kind evidence ID collision rejection: %v", err)
+	}
+}

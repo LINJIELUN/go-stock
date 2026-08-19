@@ -62,7 +62,7 @@ class WorkerTests(unittest.TestCase):
         self.thread.join()
 
     def request(self):
-        bundle = {"schemaVersion": "analysis-input-bundle-v0.2", "stockCode": "600000"}
+        bundle = {"schemaVersion": "analysis-input-bundle-v0.3", "stockCode": "600000"}
         canonical = json.dumps(bundle, ensure_ascii=False, separators=(",", ":")).encode()
         return {"protocolVersion": "isolated-analysis-engine-v0.1",
                 "bundleHash": hashlib.sha256(canonical).hexdigest(), "bundle": bundle,

@@ -19,7 +19,7 @@ from decimal import Decimal, InvalidOperation
 PROTOCOL_VERSION = "isolated-analysis-engine-v0.1"
 OUTPUT_SCHEMA = "trading-analysis-output-v0.1"
 PROBABILITY_NOTICE = "模型估计、非实际结果"
-INPUT_SCHEMA = "analysis-input-bundle-v0.2"
+INPUT_SCHEMA = "analysis-input-bundle-v0.3"
 MAX_STDIN_BYTES = 4 * 1024 * 1024
 MAX_PROVIDER_BYTES = 1024 * 1024
 
