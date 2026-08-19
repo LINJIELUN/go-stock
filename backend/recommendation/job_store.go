@@ -41,6 +41,24 @@ func NewJobStore(db *gorm.DB) (*JobStore, error) {
 	return &JobStore{db: db}, nil
 }
 
+// FindRun lets scheduler retries reuse the already frozen candidate set without
+// re-fetching market data and accidentally changing validation evidence.
+func (s *JobStore) FindRun(tradeDate time.Time, strategy string) (*models.AIAnalysisRun, bool, error) {
+	if tradeDate.IsZero() || strings.TrimSpace(strategy) == "" {
+		return nil, false, errors.New("trade date and strategy are required")
+	}
+	tradeDate = time.Date(tradeDate.Year(), tradeDate.Month(), tradeDate.Day(), 0, 0, 0, 0, tradeDate.Location())
+	var run models.AIAnalysisRun
+	err := s.db.Where("trade_date = ? AND strategy_version = ?", tradeDate, strings.TrimSpace(strategy)).First(&run).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &run, true, nil
+}
+
 // CreateRun creates one durable job per candidate. The date/strategy key makes
 // scheduler retries idempotent after process restarts.
 func (s *JobStore) CreateRun(tradeDate time.Time, strategy string, candidates []AnalysisCandidate, maxAttempts int, now time.Time) (*models.AIAnalysisRun, bool, error) {

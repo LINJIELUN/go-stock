@@ -55,6 +55,15 @@ func (s *PostCloseScheduler) Tick(ctx context.Context, now time.Time) (*models.A
 	if !trading {
 		return nil, false, nil
 	}
+	// Once a run exists, its jobs are the frozen candidate/evidence set. Avoid
+	// calling external providers again on every runtime tick.
+	existing, found, err := s.jobs.FindRun(local, s.strategy)
+	if err != nil {
+		return nil, false, fmt.Errorf("load existing analysis run: %w", err)
+	}
+	if found {
+		return existing, false, nil
+	}
 	candidates, err := s.candidates.Candidates(ctx, local)
 	if err != nil {
 		return nil, false, fmt.Errorf("load analysis candidates: %w", err)

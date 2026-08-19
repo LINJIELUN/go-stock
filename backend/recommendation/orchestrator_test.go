@@ -54,8 +54,8 @@ func TestPostCloseSchedulerHonorsCutoffTradingDayAndIdempotency(t *testing.T) {
 		t.Fatalf("scheduler did not create run: %+v %v %v", first, created, err)
 	}
 	second, created, err := scheduler.Tick(context.Background(), after.Add(time.Hour))
-	if err != nil || created || second.ID != first.ID {
-		t.Fatalf("scheduler duplicated run: %+v %v %v", second, created, err)
+	if err != nil || created || second.ID != first.ID || source.calls != 1 {
+		t.Fatalf("scheduler duplicated or re-fetched run: %+v %v calls=%d %v", second, created, source.calls, err)
 	}
 }
 
