@@ -2,7 +2,10 @@ package recommendation
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -88,7 +91,10 @@ func TestSubprocessRunnerUsesDirectJSONStdin(t *testing.T) {
 		t.Skip("cat executable unavailable")
 	}
 	cat, _ = filepath.Abs(cat)
-	runner, err := NewSubprocessRunner(cat, nil, []string{}, time.Second, 1024)
+	digest := fileDigest(t, cat)
+	runner, err := NewSubprocessRunner(cat, nil, []string{}, time.Second, 1024, EngineProcessPolicy{
+		WorkingDirectory: t.TempDir(), Artifacts: []EngineArtifact{{Path: cat, SHA256: digest}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +106,55 @@ func TestSubprocessRunnerUsesDirectJSONStdin(t *testing.T) {
 }
 
 func TestSubprocessRunnerRejectsRelativeExecutableAndLimitsOutput(t *testing.T) {
-	if _, err := NewSubprocessRunner("relative-engine", nil, nil, time.Second, 10); err == nil {
+	if _, err := NewSubprocessRunner("relative-engine", nil, nil, time.Second, 10, EngineProcessPolicy{}); err == nil {
 		t.Fatal("expected relative executable rejection")
 	}
 	buffer := &limitedProcessBuffer{limit: 3}
 	if _, err := buffer.Write([]byte("abcdef")); err != nil || !buffer.exceeded || string(buffer.Bytes()) != "abc" {
 		t.Fatalf("output limiter failed: %q exceeded=%v err=%v", buffer.Bytes(), buffer.exceeded, err)
 	}
+}
+
+func TestSubprocessRunnerRejectsChangedArtifactBeforeStart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "engine")
+	if err := os.WriteFile(path, []byte("original"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner, err := NewSubprocessRunner(path, nil, nil, time.Second, 1024, EngineProcessPolicy{
+		WorkingDirectory: t.TempDir(), Artifacts: []EngineArtifact{{Path: path, SHA256: fileDigest(t, path)}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("changed"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	result, err := runner.Run(context.Background(), nil)
+	if err == nil || result.Started || !strings.Contains(err.Error(), "integrity mismatch") {
+		t.Fatalf("expected pre-start integrity rejection: %+v %v", result, err)
+	}
+}
+
+func TestSubprocessRunnerRejectsEnvironmentOutsideAllowlist(t *testing.T) {
+	cat, err := exec.LookPath("cat")
+	if err != nil {
+		t.Skip("cat executable unavailable")
+	}
+	cat, _ = filepath.Abs(cat)
+	_, err = NewSubprocessRunner(cat, nil, []string{"UNEXPECTED_SECRET=value"}, time.Second, 1024, EngineProcessPolicy{
+		WorkingDirectory: t.TempDir(), Artifacts: []EngineArtifact{{Path: cat, SHA256: fileDigest(t, cat)}},
+		AllowedEnvironmentKeys: []string{"MODEL_API_KEY"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "non-allowlisted") {
+		t.Fatalf("expected environment allowlist rejection: %v", err)
+	}
+}
+
+func fileDigest(t *testing.T, path string) string {
+	t.Helper()
+	value, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(value))
 }
