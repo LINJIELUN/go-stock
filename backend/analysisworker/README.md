@@ -15,6 +15,8 @@ and seven-trading-day reviews.
 - `MODEL_API_ENDPOINT`: complete HTTPS chat-completions URL;
 - `MODEL_API_KEY`: provider credential;
 - `MODEL_ID`: exact model ID also configured by the Go client;
+- `MODEL_INPUT_USD_PER_MILLION`: non-negative input-token price;
+- `MODEL_OUTPUT_USD_PER_MILLION`: non-negative output-token price;
 - `MODEL_HTTP_TIMEOUT_SECONDS`: optional HTTP timeout, default `60`.
 
 `ALLOW_HTTP_LOOPBACK=1` permits HTTP only for loopback integration tests. It
@@ -33,8 +35,9 @@ The worker:
 2. checks protocol, bundle schema, hash shape, model, and prompt identity;
 3. sends the frozen bundle as untrusted evidence under a fixed system prompt;
 4. requests JSON-only output with deterministic temperature;
-5. returns token usage but reports cost as unknown, allowing the Go budget
-   boundary to settle according to configured provider pricing;
+5. calculates actual request cost from provider token usage and explicitly
+   configured per-million-token prices, allowing the Go budget boundary to
+   settle the prior reservation;
 6. writes no secrets or provider response bodies to stderr.
 
 The worker has no third-party Python dependencies. Run its tests with:

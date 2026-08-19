@@ -57,7 +57,8 @@ class WorkerTests(unittest.TestCase):
 
     def run_worker(self, request, **overrides):
         env = {"MODEL_API_ENDPOINT": f"http://127.0.0.1:{self.server.server_port}/v1/chat/completions",
-               "MODEL_API_KEY": "test-secret", "MODEL_ID": "test-model", "ALLOW_HTTP_LOOPBACK": "1"}
+               "MODEL_API_KEY": "test-secret", "MODEL_ID": "test-model", "ALLOW_HTTP_LOOPBACK": "1",
+               "MODEL_INPUT_USD_PER_MILLION": "1.5", "MODEL_OUTPUT_USD_PER_MILLION": "2"}
         env.update(overrides)
         return subprocess.run([sys.executable, str(WORKER)], input=json.dumps(request).encode(),
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, check=False)
@@ -68,7 +69,8 @@ class WorkerTests(unittest.TestCase):
         response = json.loads(result.stdout)
         self.assertEqual(response["bundleHash"], self.request()["bundleHash"])
         self.assertEqual(response["inputTokens"], 123)
-        self.assertFalse(response["actualCostKnown"])
+        self.assertTrue(response["actualCostKnown"])
+        self.assertAlmostEqual(response["actualCostUsd"], 0.0002745)
         self.assertEqual(ProviderHandler.authorization, "Bearer test-secret")
         user_message = ProviderHandler.request_body["messages"][1]["content"]
         self.assertEqual(json.loads(user_message)["stockCode"], "600000")
@@ -87,6 +89,13 @@ class WorkerTests(unittest.TestCase):
         result = self.run_worker(self.request(), MODEL_API_ENDPOINT="http://example.com/v1/chat/completions")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"must use HTTPS", result.stderr)
+
+    def test_rejects_invalid_pricing_before_provider_request(self):
+        ProviderHandler.request_body = None
+        result = self.run_worker(self.request(), MODEL_INPUT_USD_PER_MILLION="NaN")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIsNone(ProviderHandler.request_body)
+        self.assertIn(b"MODEL_INPUT_USD_PER_MILLION", result.stderr)
 
 
 if __name__ == "__main__":

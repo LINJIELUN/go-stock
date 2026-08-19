@@ -14,6 +14,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from decimal import Decimal, InvalidOperation
 
 PROTOCOL_VERSION = "isolated-analysis-engine-v0.1"
 OUTPUT_SCHEMA = "trading-analysis-output-v0.1"
@@ -30,6 +31,16 @@ def required_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
         raise WorkerError(f"missing required configuration: {name}")
+    return value
+
+
+def nonnegative_decimal_env(name: str) -> Decimal:
+    try:
+        value = Decimal(required_env(name))
+    except InvalidOperation as error:
+        raise WorkerError(f"invalid numeric configuration: {name}") from error
+    if not value.is_finite() or value < 0:
+        raise WorkerError(f"invalid numeric configuration: {name}")
     return value
 
 
@@ -78,10 +89,12 @@ the frozen bundle and never use facts newer than dataAsOf. Do not present the
 estimated probability as an observed result or investment guarantee."""
 
 
-def call_provider(request: dict) -> tuple[dict, int, int]:
+def call_provider(request: dict) -> tuple[dict, int, int, Decimal]:
     endpoint = validate_endpoint(required_env("MODEL_API_ENDPOINT"))
     api_key = required_env("MODEL_API_KEY")
     configured_model = required_env("MODEL_ID")
+    input_rate = nonnegative_decimal_env("MODEL_INPUT_USD_PER_MILLION")
+    output_rate = nonnegative_decimal_env("MODEL_OUTPUT_USD_PER_MILLION")
     if request["model"] != configured_model:
         raise WorkerError("requested model does not match configured model")
     body = {
@@ -117,19 +130,20 @@ def call_provider(request: dict) -> tuple[dict, int, int]:
         raise WorkerError("model provider response contract is invalid") from error
     if not isinstance(analysis, dict) or input_tokens < 0 or output_tokens < 0:
         raise WorkerError("model analysis or usage is invalid")
-    return analysis, input_tokens, output_tokens
+    actual_cost = (Decimal(input_tokens) * input_rate + Decimal(output_tokens) * output_rate) / Decimal(1_000_000)
+    return analysis, input_tokens, output_tokens, actual_cost
 
 
 def main() -> int:
     try:
         request = read_request()
-        analysis, input_tokens, output_tokens = call_provider(request)
+        analysis, input_tokens, output_tokens, actual_cost = call_provider(request)
         response = {
             "protocolVersion": PROTOCOL_VERSION,
             "bundleHash": request["bundleHash"],
             "analysis": analysis,
-            "actualCostKnown": False,
-            "actualCostUsd": 0,
+            "actualCostKnown": True,
+            "actualCostUsd": float(actual_cost),
             "inputTokens": input_tokens,
             "outputTokens": output_tokens,
         }
