@@ -53,3 +53,7 @@ deterministic `market-bar:<stock-code>:<trade-date>` evidence ID and an explicit
 evidence title. Models can copy both values from the bundle, while the Go
 compiler still verifies the exact ID, title, source, and trade date before
 accepting the citation.
+
+Output schema `trading-analysis-output-v0.2` no longer asks the model for score
+components or penalty points. Go derives both from the prediction, frozen
+screening evidence, and the versioned local risk policy.

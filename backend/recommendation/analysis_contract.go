@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	AnalysisSchemaVersion = "trading-analysis-output-v0.1"
+	AnalysisSchemaVersion = "trading-analysis-output-v0.2"
 	ProbabilityNotice     = "模型估计、非实际结果"
 )
 
@@ -34,8 +34,6 @@ type StructuredAnalysisOutput struct {
 	RiseProbability   float64            `json:"riseProbability"`
 	ReturnRangeLow    float64            `json:"returnRangeLow"`
 	ReturnRangeHigh   float64            `json:"returnRangeHigh"`
-	ScoreComponents   ScoreComponents    `json:"scoreComponents"`
-	Penalties         []Penalty          `json:"penalties"`
 	RiskLabels        []string           `json:"riskLabels"`
 	Rationale         string             `json:"rationale"`
 	RiskNotes         string             `json:"riskNotes"`

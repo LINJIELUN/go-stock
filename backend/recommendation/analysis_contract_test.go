@@ -15,9 +15,8 @@ func validAnalysisContract(t *testing.T, dataAsOf time.Time) []byte {
 	payload := StructuredAnalysisOutput{
 		SchemaVersion: AnalysisSchemaVersion, ProbabilityNotice: ProbabilityNotice, RiseProbability: 68,
 		ReturnRangeLow: -3, ReturnRangeHigh: 8,
-		ScoreComponents: ScoreComponents{RiseProbability: 68, ReturnOpportunity: 70, VolatilitySafety: 60, Liquidity: 80, AgentConsensus: 75, DataQuality: 95},
-		Penalties:       []Penalty{{Code: "NEW_STOCK", Points: 5}}, RiskLabels: []string{"NEW_STOCK"},
-		Rationale: "多角色证据综合后偏多，但存在不确定性。", RiskNotes: "新股历史样本较少。",
+		RiskLabels: []string{"NEW_STOCK"},
+		Rationale:  "多角色证据综合后偏多，但存在不确定性。", RiskNotes: "新股历史样本较少。",
 		Evidence: []AnalysisEvidence{{ID: "market-1", Title: "已验证日线", Source: "validated-market-data", PublishedAt: dataAsOf.Add(-time.Hour)}},
 		AgentConclusions: map[string]string{"technical": "趋势改善", "fundamental": "样本有限", "news": "无重大新增",
 			"bull": "存在上行空间", "bear": "估值风险", "risk": "控制风险敞口"},
@@ -145,14 +144,11 @@ func TestCompileStructuredAnalysisAcceptsDeterministicDailyBarEvidence(t *testin
 	}
 }
 
-func TestCompileStructuredAnalysisOverridesModelControlledScores(t *testing.T) {
+func TestCompileStructuredAnalysisDerivesScoresOutsideModelContract(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	context := validAnalysisContext(now)
 	var output StructuredAnalysisOutput
 	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
-	output.ScoreComponents.Liquidity = 100
-	output.ScoreComponents.ReturnOpportunity = 100
-	output.ScoreComponents.AgentConsensus = 100
 	raw, _ := json.Marshal(output)
 	snapshot, err := CompileStructuredAnalysis(raw, context)
 	if err != nil {
@@ -169,11 +165,11 @@ func TestCompileStructuredAnalysisOverridesModelControlledScores(t *testing.T) {
 	if _, err := CompileStructuredAnalysis(raw, context); err == nil || !strings.Contains(err.Error(), "frozen inputs") {
 		t.Fatalf("expected invented risk label rejection: %v", err)
 	}
-	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
-	output.Penalties = []Penalty{{Code: "NEW_STOCK", Points: 99}}
-	raw, _ = json.Marshal(output)
-	snapshot, err = CompileStructuredAnalysis(raw, context)
-	if err != nil || !strings.Contains(snapshot.PenaltiesJSON, `"points":5`) || strings.Contains(snapshot.PenaltiesJSON, `99`) {
-		t.Fatalf("model-controlled penalty was not replaced: %+v %v", snapshot, err)
+	if !strings.Contains(snapshot.PenaltiesJSON, `"points":5`) {
+		t.Fatalf("local penalty was not derived: %+v", snapshot)
+	}
+	withLegacyScores := []byte(strings.Replace(string(raw), `"riskLabels":`, `"scoreComponents":{},"penalties":[],"riskLabels":`, 1))
+	if _, err := CompileStructuredAnalysis(withLegacyScores, context); err == nil {
+		t.Fatal("expected removed model scoring fields to be rejected")
 	}
 }

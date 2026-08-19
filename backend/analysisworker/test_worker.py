@@ -29,7 +29,7 @@ class ProviderHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         analysis = {
-            "schemaVersion": "trading-analysis-output-v0.1",
+            "schemaVersion": "trading-analysis-output-v0.2",
             "probabilityNotice": "模型估计、非实际结果",
             "riseProbability": 55,
         }
@@ -87,6 +87,9 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(ProviderHandler.authorization, "Bearer test-secret")
         user_message = ProviderHandler.request_body["messages"][1]["content"]
         self.assertEqual(json.loads(user_message)["stockCode"], "600000")
+        system_message = ProviderHandler.request_body["messages"][0]["content"]
+        self.assertNotIn("scoreComponents", system_message)
+        self.assertNotIn("penalties", system_message)
 
     def test_rejects_model_mismatch_without_provider_request(self):
         ProviderHandler.request_body = None
