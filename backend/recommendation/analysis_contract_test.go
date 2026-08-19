@@ -33,7 +33,7 @@ func validAnalysisContext(now time.Time) AnalysisSnapshotContext {
 	dataAsOf := now.Add(-time.Hour)
 	frozen := frozenAnalysisInput{SchemaVersion: InputBundleSchemaVersion, StockCode: "600000", ValidationBatchID: 7, DataAsOf: dataAsOf,
 		BaselinePrice: 10, Screening: json.RawMessage(`{"trend":80}`),
-		DailyBars: []FrozenDailyBar{{TradeDate: dataAsOf.Add(-24 * time.Hour), Open: 9.8, High: 10.2, Low: 9.7, Close: 10, Volume: 100, Turnover: 1000, Source: "validated"}},
+		DailyBars: []FrozenDailyBar{{EvidenceID: dailyBarEvidenceID("600000", dataAsOf.Add(-24*time.Hour)), TradeDate: dataAsOf.Add(-24 * time.Hour), Open: 9.8, High: 10.2, Low: 9.7, Close: 10, Volume: 100, Turnover: 1000, Source: "validated"}},
 		News:      []TimedAnalysisFact{{ID: "market-1", Category: "market", Value: "已验证日线", Source: "validated-market-data", PublishedAt: dataAsOf.Add(-time.Hour)}}}
 	payload, _ := json.Marshal(frozen)
 	return AnalysisSnapshotContext{Job: models.AIAnalysisJob{Model: gormModel(9), StockCode: "600000", ValidationBatchID: 7},
@@ -126,5 +126,20 @@ func TestCompileStructuredAnalysisRejectsInventedOrAlteredEvidence(t *testing.T)
 	raw, _ = json.Marshal(output)
 	if _, err := CompileStructuredAnalysis(raw, context); err == nil {
 		t.Fatal("expected altered evidence source rejection")
+	}
+}
+
+func TestCompileStructuredAnalysisAcceptsDeterministicDailyBarEvidence(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	context := validAnalysisContext(now)
+	var frozen frozenAnalysisInput
+	json.Unmarshal([]byte(context.InputBundle.PayloadJSON), &frozen)
+	bar := frozen.DailyBars[0]
+	var output StructuredAnalysisOutput
+	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
+	output.Evidence[0] = AnalysisEvidence{ID: bar.EvidenceID, Title: dailyBarEvidenceTitle(bar.TradeDate), Source: bar.Source, PublishedAt: bar.TradeDate}
+	raw, _ := json.Marshal(output)
+	if _, err := CompileStructuredAnalysis(raw, context); err != nil {
+		t.Fatalf("deterministic daily bar evidence rejected: %v", err)
 	}
 }

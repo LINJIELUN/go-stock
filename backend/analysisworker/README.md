@@ -47,3 +47,8 @@ The worker has no third-party Python dependencies. Run its tests with:
 ```bash
 python3 -m unittest -v backend/analysisworker/test_worker.py
 ```
+
+Input schema `analysis-input-bundle-v0.2` assigns every frozen daily bar a
+deterministic `market-bar:<stock-code>:<trade-date>` evidence ID. Models may
+cite that ID, but the Go compiler still verifies the exact title, source, and
+trade date before accepting it.

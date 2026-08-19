@@ -15,17 +15,18 @@ import (
 	"gorm.io/gorm"
 )
 
-const InputBundleSchemaVersion = "analysis-input-bundle-v0.1"
+const InputBundleSchemaVersion = "analysis-input-bundle-v0.2"
 
 type FrozenDailyBar struct {
-	TradeDate time.Time `json:"tradeDate"`
-	Open      float64   `json:"open"`
-	High      float64   `json:"high"`
-	Low       float64   `json:"low"`
-	Close     float64   `json:"close"`
-	Volume    float64   `json:"volume"`
-	Turnover  float64   `json:"turnover"`
-	Source    string    `json:"source"`
+	EvidenceID string    `json:"evidenceId"`
+	TradeDate  time.Time `json:"tradeDate"`
+	Open       float64   `json:"open"`
+	High       float64   `json:"high"`
+	Low        float64   `json:"low"`
+	Close      float64   `json:"close"`
+	Volume     float64   `json:"volume"`
+	Turnover   float64   `json:"turnover"`
+	Source     string    `json:"source"`
 }
 
 type TimedAnalysisFact struct {
@@ -134,6 +135,7 @@ func freezeAnalysisInput(job models.AIAnalysisJob, draft AnalysisInputDraft) ([]
 	bars := append([]FrozenDailyBar(nil), draft.DailyBars...)
 	sort.Slice(bars, func(i, j int) bool { return bars[i].TradeDate.Before(bars[j].TradeDate) })
 	for index, bar := range bars {
+		bars[index].EvidenceID = dailyBarEvidenceID(draft.StockCode, bar.TradeDate)
 		if bar.TradeDate.IsZero() || bar.TradeDate.After(draft.DataAsOf) || bar.Source == "" || !finite(bar.Close) || bar.Close <= 0 ||
 			index > 0 && !bars[index-1].TradeDate.Before(bar.TradeDate) {
 			return nil, "", errors.New("input daily bars are invalid, duplicated, or newer than cutoff")
@@ -224,6 +226,9 @@ func validateFrozenAnalysisInput(frozen frozenAnalysisInput) error {
 		seenLabels[label] = struct{}{}
 	}
 	for index, bar := range frozen.DailyBars {
+		if bar.EvidenceID != dailyBarEvidenceID(frozen.StockCode, bar.TradeDate) {
+			return fmt.Errorf("frozen daily bar %d has invalid evidence identity", index)
+		}
 		if err := validateFrozenDailyBar(bar, frozen.DataAsOf); err != nil {
 			return fmt.Errorf("frozen daily bar %d: %w", index, err)
 		}
@@ -239,6 +244,14 @@ func validateFrozenAnalysisInput(frozen frozenAnalysisInput) error {
 		return fmt.Errorf("frozen facts are invalid: %w", err)
 	}
 	return nil
+}
+
+func dailyBarEvidenceID(stockCode string, tradeDate time.Time) string {
+	return "market-bar:" + stockCode + ":" + tradeDate.UTC().Format(time.DateOnly)
+}
+
+func dailyBarEvidenceTitle(tradeDate time.Time) string {
+	return "已验证日线 " + tradeDate.UTC().Format(time.DateOnly)
 }
 
 func validateFrozenDailyBar(bar FrozenDailyBar, cutoff time.Time) error {

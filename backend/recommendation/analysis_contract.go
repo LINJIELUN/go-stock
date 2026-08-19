@@ -108,7 +108,11 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 }
 
 func validateAnalysisEvidenceProvenance(evidence []AnalysisEvidence, frozen frozenAnalysisInput) error {
-	allowed := make(map[string]TimedAnalysisFact, len(frozen.FinancialFacts)+len(frozen.News)+len(frozen.Announcements))
+	allowed := make(map[string]TimedAnalysisFact, len(frozen.DailyBars)+len(frozen.FinancialFacts)+len(frozen.News)+len(frozen.Announcements))
+	for _, bar := range frozen.DailyBars {
+		allowed[bar.EvidenceID] = TimedAnalysisFact{ID: bar.EvidenceID, Category: "market", Value: dailyBarEvidenceTitle(bar.TradeDate),
+			Source: bar.Source, PublishedAt: bar.TradeDate}
+	}
 	for _, fact := range append(append(append([]TimedAnalysisFact{}, frozen.FinancialFacts...), frozen.News...), frozen.Announcements...) {
 		allowed[fact.ID] = fact
 	}

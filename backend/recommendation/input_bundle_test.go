@@ -47,6 +47,9 @@ func TestInputBundleStoreFreezesCanonicalIdempotentPayload(t *testing.T) {
 	if first.ID == 0 || first.ID != second.ID || len(first.BundleHash) != 64 || !strings.Contains(first.PayloadJSON, `"schemaVersion"`) {
 		t.Fatalf("bundle was not canonical or idempotent: first=%+v second=%+v", first, second)
 	}
+	if !strings.Contains(first.PayloadJSON, `"evidenceId":"market-bar:600000:`) {
+		t.Fatalf("daily bar evidence identity was not frozen: %s", first.PayloadJSON)
+	}
 }
 
 func TestInputBundleStoreRejectsChangedRetryAndFutureEvidence(t *testing.T) {

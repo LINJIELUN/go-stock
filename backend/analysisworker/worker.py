@@ -19,6 +19,7 @@ from decimal import Decimal, InvalidOperation
 PROTOCOL_VERSION = "isolated-analysis-engine-v0.1"
 OUTPUT_SCHEMA = "trading-analysis-output-v0.1"
 PROBABILITY_NOTICE = "模型估计、非实际结果"
+INPUT_SCHEMA = "analysis-input-bundle-v0.2"
 MAX_STDIN_BYTES = 4 * 1024 * 1024
 MAX_PROVIDER_BYTES = 1024 * 1024
 
@@ -65,7 +66,7 @@ def read_request() -> dict:
     if not re.fullmatch(r"[0-9a-f]{64}", request["bundleHash"] or ""):
         raise WorkerError("bundle hash is invalid")
     bundle = request["bundle"]
-    if not isinstance(bundle, dict) or bundle.get("schemaVersion") != "analysis-input-bundle-v0.1":
+    if not isinstance(bundle, dict) or bundle.get("schemaVersion") != INPUT_SCHEMA:
         raise WorkerError("frozen bundle schema is invalid")
     if not request["model"] or not request["promptVersion"]:
         raise WorkerError("model and prompt version are required")
