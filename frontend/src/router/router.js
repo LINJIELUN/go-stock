@@ -11,6 +11,7 @@ import cronTaskManager from "../components/cron-task-manager.vue"
 import mcpServerManager from "../components/mcp-server-manager.vue"
 import klineAnalysis from "../components/kline-analysis.vue"
 import aiConfigManager from "../components/ai-config-manager.vue"
+import aiShadowReport from "../components/ai-shadow-report.vue"
 
 const routes = [
     { path: '/', component: stockView,name: 'stock'},
@@ -24,6 +25,7 @@ const routes = [
     { path: '/mcp-servers', component: mcpServerManager,name: 'mcpServers' },
     { path: '/kline-analysis', component: klineAnalysis,name: 'klineAnalysis' },
     { path: '/ai-configs', component: aiConfigManager,name: 'aiConfigs' },
+    { path: '/ai-shadow-report', component: aiShadowReport,name: 'aiShadowReport' },
 
 ]
 

@@ -589,6 +589,18 @@ const menuOptions = ref([
     show:enableAgent.value,
     icon: renderIcon(Robot),
   },
+  {
+    label: () => h(
+        RouterLink,
+        {
+          to: { name: 'aiShadowReport' },
+          onClick: () => { activeKey.value = 'aiShadowReport' },
+        },
+        {default: () => '影子运行报告'}
+    ),
+    key: 'aiShadowReport',
+    icon: renderIcon(StatsChartOutline),
+  },
     {
       label: () =>
           h(
@@ -1041,7 +1053,7 @@ const menuOptions = ref([
 const businessMenuOptions = menuOptions.value.filter((item) =>
     ['stock', 'market', 'klineAnalysis', 'fund', 'research'].includes(item.key)
 )
-const intelligentMenuOptions = menuOptions.value.filter((item) => item.key === 'agent')
+const intelligentMenuOptions = menuOptions.value.filter((item) => ['agent', 'aiShadowReport'].includes(item.key))
 const systemMenuOptions = menuOptions.value.filter((item) => ['settings', 'about'].includes(item.key))
 const windowMenuOptions = menuOptions.value.filter((item) => ['full', 'hide', 'exit'].includes(item.key))
 
