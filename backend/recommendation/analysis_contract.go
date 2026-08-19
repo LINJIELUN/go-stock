@@ -80,6 +80,13 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 	if context.DataAsOf.After(context.CompletedAt) || context.BaselineMarketTime.After(context.CompletedAt) || context.ReviewDueDate.Before(context.CompletedAt) {
 		return nil, errors.New("analysis snapshot context times are inconsistent")
 	}
+	frozen, err := validateFrozenInputBundle(context.InputBundle, context.Job)
+	if err != nil {
+		return nil, fmt.Errorf("validate analysis evidence bundle: %w", err)
+	}
+	if err := validateAnalysisEvidenceProvenance(output.Evidence, frozen); err != nil {
+		return nil, err
+	}
 	score, err := CalculateIndex(output.ScoreComponents, output.Penalties)
 	if err != nil {
 		return nil, err
@@ -98,6 +105,20 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 		Rationale: strings.TrimSpace(output.Rationale), RiskNotes: strings.TrimSpace(output.RiskNotes), ModelVersion: context.ModelVersion,
 		PromptVersion: context.PromptVersion, ProbabilityNotice: ProbabilityNotice, EvidenceJSON: string(evidence), AgentConclusionsJSON: string(conclusions),
 		StrategyVersion: score.StrategyVersion, ReviewDueDate: context.ReviewDueDate, Status: "active"}, nil
+}
+
+func validateAnalysisEvidenceProvenance(evidence []AnalysisEvidence, frozen frozenAnalysisInput) error {
+	allowed := make(map[string]TimedAnalysisFact, len(frozen.FinancialFacts)+len(frozen.News)+len(frozen.Announcements))
+	for _, fact := range append(append(append([]TimedAnalysisFact{}, frozen.FinancialFacts...), frozen.News...), frozen.Announcements...) {
+		allowed[fact.ID] = fact
+	}
+	for _, item := range evidence {
+		fact, exists := allowed[item.ID]
+		if !exists || item.Title != fact.Value || item.Source != fact.Source || !item.PublishedAt.Equal(fact.PublishedAt) {
+			return fmt.Errorf("analysis evidence %s is not an exact frozen input fact", item.ID)
+		}
+	}
+	return nil
 }
 
 func validateStructuredAnalysis(output StructuredAnalysisOutput, dataAsOf time.Time) error {

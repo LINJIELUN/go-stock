@@ -39,7 +39,8 @@ func engineFixture(t *testing.T) (models.AIAnalysisJob, EngineInputContext, []by
 	job := models.AIAnalysisJob{Model: gormModel(9), StockCode: "600000", StockName: "浦发银行", ValidationBatchID: 7, Attempts: 1, Status: JobRunning}
 	frozen := frozenAnalysisInput{SchemaVersion: InputBundleSchemaVersion, StockCode: job.StockCode, ValidationBatchID: job.ValidationBatchID,
 		DataAsOf: now.Add(-time.Hour), BaselinePrice: 10, Screening: json.RawMessage(`{"trend":80}`),
-		DailyBars: []FrozenDailyBar{{TradeDate: now.Add(-24 * time.Hour), Open: 9.8, High: 10.2, Low: 9.7, Close: 10, Volume: 100, Turnover: 1000, Source: "validated"}}}
+		DailyBars: []FrozenDailyBar{{TradeDate: now.Add(-24 * time.Hour), Open: 9.8, High: 10.2, Low: 9.7, Close: 10, Volume: 100, Turnover: 1000, Source: "validated"}},
+		News:      []TimedAnalysisFact{{ID: "market-1", Category: "market", Value: "已验证日线", Source: "validated-market-data", PublishedAt: now.Add(-2 * time.Hour)}}}
 	payload, _ := json.Marshal(frozen)
 	bundle := models.AIAnalysisInputBundle{Model: gormModel(11), JobID: job.ID, StockCode: job.StockCode, ValidationBatchID: job.ValidationBatchID,
 		BundleHash: hashPayload(payload), SchemaVersion: InputBundleSchemaVersion, DataAsOf: frozen.DataAsOf, PayloadJSON: string(payload)}

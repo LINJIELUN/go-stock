@@ -30,9 +30,16 @@ func validAnalysisContract(t *testing.T, dataAsOf time.Time) []byte {
 }
 
 func validAnalysisContext(now time.Time) AnalysisSnapshotContext {
+	dataAsOf := now.Add(-time.Hour)
+	frozen := frozenAnalysisInput{SchemaVersion: InputBundleSchemaVersion, StockCode: "600000", ValidationBatchID: 7, DataAsOf: dataAsOf,
+		BaselinePrice: 10, Screening: json.RawMessage(`{"trend":80}`),
+		DailyBars: []FrozenDailyBar{{TradeDate: dataAsOf.Add(-24 * time.Hour), Open: 9.8, High: 10.2, Low: 9.7, Close: 10, Volume: 100, Turnover: 1000, Source: "validated"}},
+		News:      []TimedAnalysisFact{{ID: "market-1", Category: "market", Value: "已验证日线", Source: "validated-market-data", PublishedAt: dataAsOf.Add(-time.Hour)}}}
+	payload, _ := json.Marshal(frozen)
 	return AnalysisSnapshotContext{Job: models.AIAnalysisJob{Model: gormModel(9), StockCode: "600000", ValidationBatchID: 7},
-		InputBundle: models.AIAnalysisInputBundle{Model: gormModel(11), JobID: 9, StockCode: "600000", ValidationBatchID: 7, BundleHash: strings.Repeat("b", 64), DataAsOf: now.Add(-time.Hour)}, StockName: "浦发银行",
-		CompletedAt: now, DataAsOf: now.Add(-time.Hour), BaselinePrice: 10, BaselineMarketTime: now.Add(-time.Hour),
+		InputBundle: models.AIAnalysisInputBundle{Model: gormModel(11), JobID: 9, StockCode: "600000", ValidationBatchID: 7,
+			BundleHash: hashPayload(payload), SchemaVersion: InputBundleSchemaVersion, DataAsOf: dataAsOf, PayloadJSON: string(payload)}, StockName: "浦发银行",
+		CompletedAt: now, DataAsOf: dataAsOf, BaselinePrice: 10, BaselineMarketTime: dataAsOf,
 		ReviewDueDate: now.AddDate(0, 0, 10), ModelVersion: "provider/model-v1", PromptVersion: "prompt-v1"}
 }
 
@@ -101,5 +108,23 @@ func TestCompileStructuredAnalysisRejectsSpoofedNoticeAndInvalidContext(t *testi
 	context.Job.ValidationBatchID = 0
 	if _, err := CompileStructuredAnalysis(validAnalysisContract(t, context.DataAsOf), context); err == nil {
 		t.Fatal("expected invalid context rejection")
+	}
+}
+
+func TestCompileStructuredAnalysisRejectsInventedOrAlteredEvidence(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	context := validAnalysisContext(now)
+	var output StructuredAnalysisOutput
+	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
+	output.Evidence[0].ID = "invented"
+	raw, _ := json.Marshal(output)
+	if _, err := CompileStructuredAnalysis(raw, context); err == nil || !strings.Contains(err.Error(), "exact frozen input fact") {
+		t.Fatalf("expected invented evidence rejection: %v", err)
+	}
+	output.Evidence[0].ID = "market-1"
+	output.Evidence[0].Source = "different-source"
+	raw, _ = json.Marshal(output)
+	if _, err := CompileStructuredAnalysis(raw, context); err == nil {
+		t.Fatal("expected altered evidence source rejection")
 	}
 }
