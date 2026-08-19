@@ -38,7 +38,9 @@ The worker:
 5. calculates actual request cost from provider token usage and explicitly
    configured per-million-token prices, allowing the Go budget boundary to
    settle the prior reservation;
-6. writes no secrets or provider response bodies to stderr.
+6. rejects redirects and missing token usage instead of forwarding credentials
+   or falsely claiming that a paid request cost zero;
+7. writes no secrets or provider response bodies to stderr.
 
 The worker has no third-party Python dependencies. Run its tests with:
 

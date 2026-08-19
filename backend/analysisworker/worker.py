@@ -27,6 +27,11 @@ class WorkerError(Exception):
     pass
 
 
+class RejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, _request, _file, _code, _message, _headers, _new_url):
+        return None
+
+
 def required_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -113,7 +118,11 @@ def call_provider(request: dict) -> tuple[dict, int, int, Decimal]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(http_request, timeout=float(os.environ.get("MODEL_HTTP_TIMEOUT_SECONDS", "60"))) as response:
+        timeout = float(os.environ.get("MODEL_HTTP_TIMEOUT_SECONDS", "60"))
+        if not 0 < timeout <= 300:
+            raise ValueError("timeout outside allowed range")
+        opener = urllib.request.build_opener(RejectRedirects())
+        with opener.open(http_request, timeout=timeout) as response:
             raw = response.read(MAX_PROVIDER_BYTES + 1)
     except (urllib.error.URLError, TimeoutError, ValueError) as error:
         raise WorkerError("model provider request failed") from error
@@ -123,12 +132,12 @@ def call_provider(request: dict) -> tuple[dict, int, int, Decimal]:
         response = json.loads(raw)
         content = response["choices"][0]["message"]["content"]
         analysis = json.loads(content)
-        usage = response.get("usage") or {}
-        input_tokens = int(usage.get("prompt_tokens", 0))
-        output_tokens = int(usage.get("completion_tokens", 0))
+        usage = response["usage"]
+        input_tokens = usage["prompt_tokens"]
+        output_tokens = usage["completion_tokens"]
     except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise WorkerError("model provider response contract is invalid") from error
-    if not isinstance(analysis, dict) or input_tokens < 0 or output_tokens < 0:
+    if not isinstance(analysis, dict) or type(input_tokens) is not int or type(output_tokens) is not int or input_tokens < 0 or output_tokens < 0:
         raise WorkerError("model analysis or usage is invalid")
     actual_cost = (Decimal(input_tokens) * input_rate + Decimal(output_tokens) * output_rate) / Decimal(1_000_000)
     return analysis, input_tokens, output_tokens, actual_cost
