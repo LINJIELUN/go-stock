@@ -73,3 +73,24 @@ func TestInputBundleStoreRejectsDuplicateFactsAcrossCategories(t *testing.T) {
 		t.Fatal("expected duplicate fact rejection")
 	}
 }
+
+func TestValidateFrozenInputBundleRejectsMetadataAndCanonicalPayloadMismatch(t *testing.T) {
+	store, job, draft, _ := inputBundleFixture(t)
+	bundle, err := store.Save(job, draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validateFrozenInputBundle(*bundle, job); err != nil {
+		t.Fatalf("valid stored bundle rejected: %v", err)
+	}
+	tampered := *bundle
+	tampered.PayloadJSON = strings.Replace(tampered.PayloadJSON, `"baselinePrice":10`, `"baselinePrice":11`, 1)
+	if _, err := validateFrozenInputBundle(tampered, job); err == nil {
+		t.Fatal("expected changed payload rejection")
+	}
+	wrongJob := job
+	wrongJob.StockCode = "000001"
+	if _, err := validateFrozenInputBundle(*bundle, wrongJob); err == nil {
+		t.Fatal("expected job metadata mismatch rejection")
+	}
+}

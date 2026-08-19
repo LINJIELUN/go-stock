@@ -164,6 +164,45 @@ func freezeAnalysisInput(job models.AIAnalysisJob, draft AnalysisInputDraft) ([]
 	return payload, hex.EncodeToString(digest[:]), nil
 }
 
+// validateFrozenInputBundle verifies the persisted bytes rather than trusting
+// duplicated database metadata. It is called immediately before an external
+// engine receives the bundle.
+func validateFrozenInputBundle(bundle models.AIAnalysisInputBundle, job models.AIAnalysisJob) (frozenAnalysisInput, error) {
+	var frozen frozenAnalysisInput
+	if bundle.ID == 0 || job.ID == 0 || bundle.JobID != job.ID || bundle.StockCode != job.StockCode ||
+		bundle.ValidationBatchID != job.ValidationBatchID || bundle.SchemaVersion != InputBundleSchemaVersion || len(bundle.BundleHash) != sha256.Size*2 {
+		return frozen, errors.New("frozen input bundle metadata does not match job")
+	}
+	payload := []byte(bundle.PayloadJSON)
+	digest := sha256.Sum256(payload)
+	if !strings.EqualFold(bundle.BundleHash, hex.EncodeToString(digest[:])) {
+		return frozen, errors.New("frozen input bundle hash does not match payload")
+	}
+	decoder := json.NewDecoder(strings.NewReader(bundle.PayloadJSON))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&frozen); err != nil {
+		return frozen, fmt.Errorf("decode frozen input bundle: %w", err)
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return frozen, err
+	}
+	if frozen.SchemaVersion != InputBundleSchemaVersion || frozen.StockCode != bundle.StockCode ||
+		frozen.ValidationBatchID != bundle.ValidationBatchID || !frozen.DataAsOf.Equal(bundle.DataAsOf) || frozen.DataAsOf.IsZero() ||
+		!finite(frozen.BaselinePrice) || frozen.BaselinePrice <= 0 || len(frozen.DailyBars) == 0 {
+		return frozen, errors.New("frozen input bundle payload identity is invalid")
+	}
+	canonical, err := json.Marshal(frozen)
+	if err != nil || !strings.EqualFold(bundle.BundleHash, hashPayload(canonical)) || !json.Valid(canonical) {
+		return frozen, errors.New("frozen input bundle payload is not canonical")
+	}
+	return frozen, nil
+}
+
+func hashPayload(payload []byte) string {
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
+}
+
 func canonicalJSONObject(value string) (json.RawMessage, error) {
 	var decoded map[string]any
 	if value == "" || json.Unmarshal([]byte(value), &decoded) != nil || decoded == nil {

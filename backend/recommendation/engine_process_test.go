@@ -37,8 +37,12 @@ func engineFixture(t *testing.T) (models.AIAnalysisJob, EngineInputContext, []by
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	job := models.AIAnalysisJob{Model: gormModel(9), StockCode: "600000", StockName: "浦发银行", ValidationBatchID: 7, Attempts: 1, Status: JobRunning}
+	frozen := frozenAnalysisInput{SchemaVersion: InputBundleSchemaVersion, StockCode: job.StockCode, ValidationBatchID: job.ValidationBatchID,
+		DataAsOf: now.Add(-time.Hour), BaselinePrice: 10, Screening: json.RawMessage(`{"trend":80}`),
+		DailyBars: []FrozenDailyBar{{TradeDate: now.Add(-24 * time.Hour), Close: 10, Source: "validated"}}}
+	payload, _ := json.Marshal(frozen)
 	bundle := models.AIAnalysisInputBundle{Model: gormModel(11), JobID: job.ID, StockCode: job.StockCode, ValidationBatchID: job.ValidationBatchID,
-		BundleHash: strings.Repeat("c", 64), SchemaVersion: InputBundleSchemaVersion, DataAsOf: now.Add(-time.Hour), PayloadJSON: `{"schemaVersion":"analysis-input-bundle-v0.1"}`}
+		BundleHash: hashPayload(payload), SchemaVersion: InputBundleSchemaVersion, DataAsOf: frozen.DataAsOf, PayloadJSON: string(payload)}
 	snapshotContext := validAnalysisContext(now)
 	snapshotContext.Job = job
 	snapshotContext.InputBundle = bundle
@@ -82,6 +86,18 @@ func TestIsolatedEngineClientRejectsBundleMismatch(t *testing.T) {
 	result, err := client.Analyze(context.Background(), job, ModelPlan{})
 	if err == nil || !result.RequestSent {
 		t.Fatalf("expected sent mismatched response rejection: %+v %v", result, err)
+	}
+}
+
+func TestIsolatedEngineClientRejectsTamperedBundleBeforeRequest(t *testing.T) {
+	job, engineContext, response := engineFixture(t)
+	engineContext.Bundle.PayloadJSON = strings.Replace(engineContext.Bundle.PayloadJSON, `"baselinePrice":10`, `"baselinePrice":11`, 1)
+	runner := &fakeEngineRunner{output: response, started: true}
+	client, _ := NewIsolatedEngineClient(runner, fixedEngineContext{engineContext},
+		IsolatedEngineConfig{Provider: "provider", Model: "model", PromptVersion: "prompt-v1", EstimatedCostUSD: 0.5})
+	result, err := client.Analyze(context.Background(), job, ModelPlan{})
+	if err == nil || result.RequestSent || len(runner.input) != 0 || !strings.Contains(err.Error(), "hash does not match") {
+		t.Fatalf("expected pre-request bundle integrity rejection: %+v %v", result, err)
 	}
 }
 

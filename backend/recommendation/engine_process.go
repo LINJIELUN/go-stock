@@ -276,8 +276,12 @@ func (c *IsolatedEngineClient) Analyze(ctx context.Context, job models.AIAnalysi
 	if err != nil {
 		return PaidAnalysisResult{}, fmt.Errorf("load frozen engine context: %w", err)
 	}
-	if engineContext.Bundle.JobID != job.ID || engineContext.Bundle.BundleHash == "" || !json.Valid([]byte(engineContext.Bundle.PayloadJSON)) {
-		return PaidAnalysisResult{}, errors.New("frozen engine context does not match job")
+	frozen, err := validateFrozenInputBundle(engineContext.Bundle, job)
+	if err != nil {
+		return PaidAnalysisResult{}, fmt.Errorf("validate frozen engine context: %w", err)
+	}
+	if !engineContext.Snapshot.DataAsOf.Equal(frozen.DataAsOf) || engineContext.Snapshot.BaselinePrice != frozen.BaselinePrice {
+		return PaidAnalysisResult{}, errors.New("frozen engine context does not match snapshot context")
 	}
 	request, _ := json.Marshal(engineRequest{EngineProtocolVersion, engineContext.Bundle.BundleHash, json.RawMessage(engineContext.Bundle.PayloadJSON), c.config.Model, c.config.PromptVersion})
 	process, runErr := c.runner.Run(ctx, request)
