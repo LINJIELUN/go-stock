@@ -37,8 +37,9 @@ func engineFixture(t *testing.T) (models.AIAnalysisJob, EngineInputContext, []by
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	job := models.AIAnalysisJob{Model: gormModel(9), StockCode: "600000", StockName: "浦发银行", ValidationBatchID: 7, Attempts: 1, Status: JobRunning}
+	screening, _ := json.Marshal(screeningEvidence{Version: PreScreeningVersion, Trend: 80, Liquidity: 80, RiskSafety: 60, DataQuality: 95, IsNewStock: true})
 	frozen := frozenAnalysisInput{SchemaVersion: InputBundleSchemaVersion, StockCode: job.StockCode, ValidationBatchID: job.ValidationBatchID,
-		DataAsOf: now.Add(-time.Hour), BaselinePrice: 10, Screening: json.RawMessage(`{"trend":80}`),
+		DataAsOf: now.Add(-time.Hour), BaselinePrice: 10, Screening: screening, RiskLabels: []string{"NEW_STOCK"},
 		DailyBars: []FrozenDailyBar{{EvidenceID: dailyBarEvidenceID(job.StockCode, now.Add(-24*time.Hour)), EvidenceTitle: dailyBarEvidenceTitle(now.Add(-24 * time.Hour)), TradeDate: now.Add(-24 * time.Hour), Open: 9.8, High: 10.2, Low: 9.7, Close: 10, Volume: 100, Turnover: 1000, Source: "validated"}},
 		News:      []TimedAnalysisFact{{ID: "market-1", Category: "market", Value: "已验证日线", Source: "validated-market-data", PublishedAt: now.Add(-2 * time.Hour)}}}
 	payload, _ := json.Marshal(frozen)

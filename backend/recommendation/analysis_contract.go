@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -87,6 +89,9 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 	if err := validateAnalysisEvidenceProvenance(output.Evidence, frozen); err != nil {
 		return nil, err
 	}
+	if err := validateAuthoritativeScoreInputs(output, frozen); err != nil {
+		return nil, err
+	}
 	score, err := CalculateIndex(output.ScoreComponents, output.Penalties)
 	if err != nil {
 		return nil, err
@@ -105,6 +110,38 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 		Rationale: strings.TrimSpace(output.Rationale), RiskNotes: strings.TrimSpace(output.RiskNotes), ModelVersion: context.ModelVersion,
 		PromptVersion: context.PromptVersion, ProbabilityNotice: ProbabilityNotice, EvidenceJSON: string(evidence), AgentConclusionsJSON: string(conclusions),
 		StrategyVersion: score.StrategyVersion, ReviewDueDate: context.ReviewDueDate, Status: "active"}, nil
+}
+
+func validateAuthoritativeScoreInputs(output StructuredAnalysisOutput, frozen frozenAnalysisInput) error {
+	var screening screeningEvidence
+	decoder := json.NewDecoder(bytes.NewReader(frozen.Screening))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&screening); err != nil || ensureJSONEOF(decoder) != nil || screening.Version != PreScreeningVersion {
+		return errors.New("frozen screening score evidence is invalid")
+	}
+	if output.ScoreComponents.RiseProbability != output.RiseProbability ||
+		output.ScoreComponents.VolatilitySafety != screening.RiskSafety ||
+		output.ScoreComponents.Liquidity != screening.Liquidity ||
+		output.ScoreComponents.DataQuality != screening.DataQuality {
+		return errors.New("model score components conflict with authoritative inputs")
+	}
+	expectedLabels := append([]string(nil), frozen.RiskLabels...)
+	actualLabels := append([]string(nil), output.RiskLabels...)
+	sort.Strings(expectedLabels)
+	sort.Strings(actualLabels)
+	if !slices.Equal(expectedLabels, actualLabels) {
+		return errors.New("model risk labels conflict with frozen inputs")
+	}
+	allowedPenalties := make(map[string]struct{}, len(expectedLabels))
+	for _, label := range expectedLabels {
+		allowedPenalties[label] = struct{}{}
+	}
+	for _, penalty := range output.Penalties {
+		if _, exists := allowedPenalties[penalty.Code]; !exists {
+			return fmt.Errorf("model penalty %s is not backed by a frozen risk label", penalty.Code)
+		}
+	}
+	return nil
 }
 
 func validateAnalysisEvidenceProvenance(evidence []AnalysisEvidence, frozen frozenAnalysisInput) error {

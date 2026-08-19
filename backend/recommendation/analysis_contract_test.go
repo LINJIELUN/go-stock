@@ -31,8 +31,9 @@ func validAnalysisContract(t *testing.T, dataAsOf time.Time) []byte {
 
 func validAnalysisContext(now time.Time) AnalysisSnapshotContext {
 	dataAsOf := now.Add(-time.Hour)
+	screening, _ := json.Marshal(screeningEvidence{Version: PreScreeningVersion, Trend: 80, Liquidity: 80, RiskSafety: 60, DataQuality: 95, IsNewStock: true})
 	frozen := frozenAnalysisInput{SchemaVersion: InputBundleSchemaVersion, StockCode: "600000", ValidationBatchID: 7, DataAsOf: dataAsOf,
-		BaselinePrice: 10, Screening: json.RawMessage(`{"trend":80}`),
+		BaselinePrice: 10, Screening: screening, RiskLabels: []string{"NEW_STOCK"},
 		DailyBars: []FrozenDailyBar{{EvidenceID: dailyBarEvidenceID("600000", dataAsOf.Add(-24*time.Hour)), EvidenceTitle: dailyBarEvidenceTitle(dataAsOf.Add(-24 * time.Hour)), TradeDate: dataAsOf.Add(-24 * time.Hour), Open: 9.8, High: 10.2, Low: 9.7, Close: 10, Volume: 100, Turnover: 1000, Source: "validated"}},
 		News:      []TimedAnalysisFact{{ID: "market-1", Category: "market", Value: "已验证日线", Source: "validated-market-data", PublishedAt: dataAsOf.Add(-time.Hour)}}}
 	payload, _ := json.Marshal(frozen)
@@ -141,5 +142,29 @@ func TestCompileStructuredAnalysisAcceptsDeterministicDailyBarEvidence(t *testin
 	raw, _ := json.Marshal(output)
 	if _, err := CompileStructuredAnalysis(raw, context); err != nil {
 		t.Fatalf("deterministic daily bar evidence rejected: %v", err)
+	}
+}
+
+func TestCompileStructuredAnalysisRejectsModelControlledAuthoritativeScores(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	context := validAnalysisContext(now)
+	var output StructuredAnalysisOutput
+	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
+	output.ScoreComponents.Liquidity = 100
+	raw, _ := json.Marshal(output)
+	if _, err := CompileStructuredAnalysis(raw, context); err == nil || !strings.Contains(err.Error(), "authoritative inputs") {
+		t.Fatalf("expected model-controlled liquidity rejection: %v", err)
+	}
+	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
+	output.RiskLabels = []string{"ST"}
+	raw, _ = json.Marshal(output)
+	if _, err := CompileStructuredAnalysis(raw, context); err == nil || !strings.Contains(err.Error(), "frozen inputs") {
+		t.Fatalf("expected invented risk label rejection: %v", err)
+	}
+	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
+	output.Penalties = append(output.Penalties, Penalty{Code: "INVENTED", Points: 20})
+	raw, _ = json.Marshal(output)
+	if _, err := CompileStructuredAnalysis(raw, context); err == nil || !strings.Contains(err.Error(), "not backed") {
+		t.Fatalf("expected unbacked penalty rejection: %v", err)
 	}
 }
