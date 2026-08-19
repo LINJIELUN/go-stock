@@ -1136,6 +1136,8 @@ type AIRecommendationSnapshot struct {
 	gorm.Model
 	SourceType            string    `json:"sourceType" gorm:"size:20;not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
 	ValidationBatchID     uint      `json:"validationBatchId" gorm:"not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
+	InputBundleID         uint      `json:"inputBundleId" gorm:"not null;default:0;index"`
+	InputBundleHash       string    `json:"inputBundleHash" gorm:"size:64;not null;default:'legacy-unknown';index"`
 	StockCode             string    `json:"stockCode" gorm:"size:20;not null;index"`
 	StockName             string    `json:"stockName" gorm:"size:80;not null"`
 	RiskLabelsJSON        string    `json:"riskLabelsJson" gorm:"type:text;not null;default:'[]'"`
@@ -1271,6 +1273,21 @@ type AIModelUsage struct {
 }
 
 func (AIModelUsage) TableName() string { return "ai_model_usage" }
+
+// AIAnalysisInputBundle freezes every locally approved input before any model
+// request, so retries and later reviews can reproduce the exact evidence set.
+type AIAnalysisInputBundle struct {
+	gorm.Model
+	JobID             uint      `json:"jobId" gorm:"not null;index"`
+	StockCode         string    `json:"stockCode" gorm:"size:20;not null;index"`
+	ValidationBatchID uint      `json:"validationBatchId" gorm:"not null;index"`
+	BundleHash        string    `json:"bundleHash" gorm:"size:64;not null;uniqueIndex"`
+	SchemaVersion     string    `json:"schemaVersion" gorm:"size:80;not null"`
+	DataAsOf          time.Time `json:"dataAsOf" gorm:"not null;index"`
+	PayloadJSON       string    `json:"payloadJson" gorm:"type:text;not null"`
+}
+
+func (AIAnalysisInputBundle) TableName() string { return "ai_analysis_input_bundles" }
 
 // StockFinancialInfoResp
 type StockFinancialInfoResp struct {

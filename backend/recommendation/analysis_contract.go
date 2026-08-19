@@ -43,6 +43,7 @@ type StructuredAnalysisOutput struct {
 
 type AnalysisSnapshotContext struct {
 	Job                models.AIAnalysisJob
+	InputBundle        models.AIAnalysisInputBundle
 	StockName          string
 	CompletedAt        time.Time
 	DataAsOf           time.Time
@@ -69,6 +70,9 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 		return nil, err
 	}
 	if context.Job.ID == 0 || context.Job.StockCode == "" || context.Job.ValidationBatchID == 0 || context.StockName == "" ||
+		context.InputBundle.ID == 0 || len(context.InputBundle.BundleHash) != 64 || context.InputBundle.JobID != context.Job.ID ||
+		context.InputBundle.StockCode != context.Job.StockCode || context.InputBundle.ValidationBatchID != context.Job.ValidationBatchID ||
+		!context.InputBundle.DataAsOf.Equal(context.DataAsOf) ||
 		context.CompletedAt.IsZero() || context.DataAsOf.IsZero() || context.BaselineMarketTime.IsZero() || context.ReviewDueDate.IsZero() ||
 		context.ModelVersion == "" || context.PromptVersion == "" || !finite(context.BaselinePrice) || context.BaselinePrice <= 0 {
 		return nil, errors.New("analysis snapshot context is incomplete")
@@ -86,6 +90,7 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 	evidence, _ := json.Marshal(output.Evidence)
 	conclusions, _ := json.Marshal(output.AgentConclusions)
 	return &models.AIRecommendationSnapshot{SourceType: SourceAutomatic, ValidationBatchID: context.Job.ValidationBatchID,
+		InputBundleID: context.InputBundle.ID, InputBundleHash: context.InputBundle.BundleHash,
 		StockCode: context.Job.StockCode, StockName: context.StockName, RiskLabelsJSON: string(labels), CompletedAt: context.CompletedAt,
 		DataAsOf: context.DataAsOf, BaselinePrice: context.BaselinePrice, BaselineMarketTime: context.BaselineMarketTime,
 		RiseProbability: output.RiseProbability, ReturnRangeLow: output.ReturnRangeLow, ReturnRangeHigh: output.ReturnRangeHigh,

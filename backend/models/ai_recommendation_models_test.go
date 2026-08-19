@@ -20,6 +20,7 @@ func TestAIRecommendationModelsMigrateWithRequiredIndexes(t *testing.T) {
 		&AIAnalysisRun{},
 		&AIAnalysisJob{},
 		&AIModelUsage{},
+		&AIAnalysisInputBundle{},
 	}
 	if err := database.AutoMigrate(models...); err != nil {
 		t.Fatal(err)
@@ -49,5 +50,8 @@ func TestAIRecommendationModelsMigrateWithRequiredIndexes(t *testing.T) {
 	}
 	if !database.Migrator().HasIndex(&AIModelUsage{}, "idx_ai_usage_job_attempt") {
 		t.Fatal("AI usage job/attempt unique index was not created")
+	}
+	if !database.Migrator().HasIndex(&AIAnalysisInputBundle{}, "idx_ai_analysis_input_bundles_bundle_hash") {
+		t.Fatal("analysis input bundle hash unique index was not created")
 	}
 }

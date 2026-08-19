@@ -30,7 +30,8 @@ func validAnalysisContract(t *testing.T, dataAsOf time.Time) []byte {
 }
 
 func validAnalysisContext(now time.Time) AnalysisSnapshotContext {
-	return AnalysisSnapshotContext{Job: models.AIAnalysisJob{Model: gormModel(9), StockCode: "600000", ValidationBatchID: 7}, StockName: "浦发银行",
+	return AnalysisSnapshotContext{Job: models.AIAnalysisJob{Model: gormModel(9), StockCode: "600000", ValidationBatchID: 7},
+		InputBundle: models.AIAnalysisInputBundle{Model: gormModel(11), JobID: 9, StockCode: "600000", ValidationBatchID: 7, BundleHash: strings.Repeat("b", 64), DataAsOf: now.Add(-time.Hour)}, StockName: "浦发银行",
 		CompletedAt: now, DataAsOf: now.Add(-time.Hour), BaselinePrice: 10, BaselineMarketTime: now.Add(-time.Hour),
 		ReviewDueDate: now.AddDate(0, 0, 10), ModelVersion: "provider/model-v1", PromptVersion: "prompt-v1"}
 }

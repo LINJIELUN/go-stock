@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ func testStore(t *testing.T) (*Store, *gorm.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := database.AutoMigrate(&models.MarketDataValidationBatch{}, &models.AIRecommendationSnapshot{}, &models.AIRecommendationFavorite{}, &models.AIRecommendationReview{}); err != nil {
+	if err := database.AutoMigrate(&models.MarketDataValidationBatch{}, &models.AIAnalysisInputBundle{}, &models.AIRecommendationSnapshot{}, &models.AIRecommendationFavorite{}, &models.AIRecommendationReview{}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
@@ -29,6 +30,11 @@ func testStore(t *testing.T) (*Store, *gorm.DB) {
 	if err := database.Create(&batch).Error; err != nil {
 		t.Fatal(err)
 	}
+	bundle := models.AIAnalysisInputBundle{StockCode: "600000", ValidationBatchID: batch.ID, BundleHash: strings.Repeat("a", 64),
+		SchemaVersion: "legacy-test-fixture", PayloadJSON: `{}`}
+	if err := database.Create(&bundle).Error; err != nil {
+		t.Fatal(err)
+	}
 	store, err := NewStore(database)
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +44,7 @@ func testStore(t *testing.T) (*Store, *gorm.DB) {
 
 func validSnapshot(now time.Time) *models.AIRecommendationSnapshot {
 	return &models.AIRecommendationSnapshot{
-		SourceType: SourceManual, ValidationBatchID: 1, StockCode: "600000", StockName: "浦发银行",
+		SourceType: SourceManual, ValidationBatchID: 1, InputBundleID: 1, InputBundleHash: strings.Repeat("a", 64), StockCode: "600000", StockName: "浦发银行",
 		RiskLabelsJSON: "[]", CompletedAt: now, DataAsOf: now, BaselinePrice: 10,
 		BaselineMarketTime: now, RiseProbability: 65, ReturnRangeLow: -2,
 		ReturnRangeHigh: 8, AIRecommendationIndex: 70, ScoreComponentsJSON: `{ "dataQuality": 80 }`,

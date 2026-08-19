@@ -73,6 +73,15 @@ func requireValidationBatch(tx *gorm.DB, snapshot *models.AIRecommendationSnapsh
 	if dataDate < batch.RangeStart.Format(time.DateOnly) || dataDate > batch.RangeEnd.Format(time.DateOnly) {
 		return errors.New("recommendation data time is outside validation batch range")
 	}
+	var bundle models.AIAnalysisInputBundle
+	if err := tx.First(&bundle, snapshot.InputBundleID).Error; err != nil {
+		return fmt.Errorf("load frozen analysis input: %w", err)
+	}
+	if bundle.BundleHash != snapshot.InputBundleHash || bundle.ValidationBatchID != snapshot.ValidationBatchID ||
+		strings.SplitN(bundle.StockCode, ".", 2)[0] != snapshotCode ||
+		bundle.SchemaVersion == InputBundleSchemaVersion && !bundle.DataAsOf.Equal(snapshot.DataAsOf) {
+		return errors.New("frozen analysis input does not match recommendation snapshot")
+	}
 	return nil
 }
 
@@ -130,6 +139,9 @@ func validateSnapshot(snapshot *models.AIRecommendationSnapshot) error {
 	}
 	if snapshot.ValidationBatchID == 0 {
 		return errors.New("validated market data batch is required")
+	}
+	if snapshot.InputBundleID == 0 || len(snapshot.InputBundleHash) != 64 {
+		return errors.New("frozen analysis input id and SHA-256 hash are required")
 	}
 	if snapshot.StockCode == "" || snapshot.StockName == "" {
 		return errors.New("stock code and name are required")
