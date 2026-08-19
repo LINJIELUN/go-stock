@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -156,6 +157,9 @@ func freezeAnalysisInput(job models.AIAnalysisJob, draft AnalysisInputDraft) ([]
 	}
 	frozen := frozenAnalysisInput{InputBundleSchemaVersion, draft.StockCode, draft.ValidationBatchID, draft.DataAsOf, draft.BaselinePrice,
 		screening, labels, bars, selectFacts(draft.FinancialFacts), selectFacts(draft.News), selectFacts(draft.Announcements)}
+	if err := validateFrozenAnalysisInput(frozen); err != nil {
+		return nil, "", err
+	}
 	payload, err := json.Marshal(frozen)
 	if err != nil {
 		return nil, "", err
@@ -191,11 +195,61 @@ func validateFrozenInputBundle(bundle models.AIAnalysisInputBundle, job models.A
 		!finite(frozen.BaselinePrice) || frozen.BaselinePrice <= 0 || len(frozen.DailyBars) == 0 {
 		return frozen, errors.New("frozen input bundle payload identity is invalid")
 	}
+	if err := validateFrozenAnalysisInput(frozen); err != nil {
+		return frozen, err
+	}
 	canonical, err := json.Marshal(frozen)
 	if err != nil || !strings.EqualFold(bundle.BundleHash, hashPayload(canonical)) || !json.Valid(canonical) {
 		return frozen, errors.New("frozen input bundle payload is not canonical")
 	}
 	return frozen, nil
+}
+
+func validateFrozenAnalysisInput(frozen frozenAnalysisInput) error {
+	if frozen.SchemaVersion != InputBundleSchemaVersion || frozen.StockCode == "" || frozen.ValidationBatchID == 0 || frozen.DataAsOf.IsZero() ||
+		!finite(frozen.BaselinePrice) || frozen.BaselinePrice <= 0 || len(frozen.DailyBars) == 0 {
+		return errors.New("frozen input identity, cutoff, price, and daily bars are required")
+	}
+	if _, err := canonicalJSONObject(string(frozen.Screening)); err != nil {
+		return fmt.Errorf("frozen screening evidence is invalid: %w", err)
+	}
+	seenLabels := make(map[string]struct{}, len(frozen.RiskLabels))
+	for _, label := range frozen.RiskLabels {
+		if strings.TrimSpace(label) == "" {
+			return errors.New("frozen risk labels must be non-empty and unique")
+		}
+		if _, exists := seenLabels[label]; exists {
+			return errors.New("frozen risk labels must be non-empty and unique")
+		}
+		seenLabels[label] = struct{}{}
+	}
+	for index, bar := range frozen.DailyBars {
+		if err := validateFrozenDailyBar(bar, frozen.DataAsOf); err != nil {
+			return fmt.Errorf("frozen daily bar %d: %w", index, err)
+		}
+		if index > 0 && !frozen.DailyBars[index-1].TradeDate.Before(bar.TradeDate) {
+			return errors.New("frozen daily bars must be unique and chronological")
+		}
+	}
+	if frozen.BaselinePrice != frozen.DailyBars[len(frozen.DailyBars)-1].Close {
+		return errors.New("frozen baseline price must equal the latest validated close")
+	}
+	facts := append(append(append([]TimedAnalysisFact{}, frozen.FinancialFacts...), frozen.News...), frozen.Announcements...)
+	if _, err := canonicalFacts(frozen.DataAsOf, facts); err != nil {
+		return fmt.Errorf("frozen facts are invalid: %w", err)
+	}
+	return nil
+}
+
+func validateFrozenDailyBar(bar FrozenDailyBar, cutoff time.Time) error {
+	if bar.TradeDate.IsZero() || bar.TradeDate.After(cutoff) || strings.TrimSpace(bar.Source) == "" ||
+		!finite(bar.Open) || !finite(bar.High) || !finite(bar.Low) || !finite(bar.Close) ||
+		bar.Open <= 0 || bar.High <= 0 || bar.Low <= 0 || bar.Close <= 0 ||
+		bar.High < math.Max(bar.Open, bar.Close) || bar.Low > math.Min(bar.Open, bar.Close) || bar.Low > bar.High ||
+		!finite(bar.Volume) || !finite(bar.Turnover) || bar.Volume < 0 || bar.Turnover < 0 {
+		return errors.New("OHLC, volume, turnover, source, or trade date is invalid")
+	}
+	return nil
 }
 
 func hashPayload(payload []byte) string {

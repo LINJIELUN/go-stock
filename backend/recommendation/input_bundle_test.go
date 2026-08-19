@@ -94,3 +94,17 @@ func TestValidateFrozenInputBundleRejectsMetadataAndCanonicalPayloadMismatch(t *
 		t.Fatal("expected job metadata mismatch rejection")
 	}
 }
+
+func TestInputBundleStoreRejectsInvalidOHLCAndStaleBaseline(t *testing.T) {
+	store, job, draft, _ := inputBundleFixture(t)
+	draft.DailyBars[0].High = draft.DailyBars[0].Close - 1
+	if _, err := store.Save(job, draft); err == nil || !strings.Contains(err.Error(), "OHLC") {
+		t.Fatalf("expected invalid OHLC rejection: %v", err)
+	}
+
+	store, job, draft, _ = inputBundleFixture(t)
+	draft.BaselinePrice = draft.DailyBars[0].Close + 1
+	if _, err := store.Save(job, draft); err == nil || !strings.Contains(err.Error(), "latest validated close") {
+		t.Fatalf("expected stale baseline rejection: %v", err)
+	}
+}
