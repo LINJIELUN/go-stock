@@ -68,7 +68,7 @@ func TestOfflinePipelineRunsValidationThroughReviewWithoutRefetch(t *testing.T) 
 	universe := &pipelineUniverse{items: []ScreeningUniverseItem{{
 		Identity: ScreeningIdentity{StockCode: "600000", StockName: "浦发银行"}, Instrument: instrument,
 	}}}
-	screening, err := NewValidatedScreeningProvider(universe, validation, validationStore, 45)
+	screening, err := NewValidatedScreeningProvider(universe, validation, validationStore, 45, 2)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,6 +33,27 @@ func (f fixtureDailyBars) DailyBars(context.Context, marketdata.Instrument, time
 	return f.bars, nil
 }
 
+type concurrentFixtureBars struct {
+	name      string
+	byCode    map[string][]marketdata.DailyBar
+	active    int32
+	maxActive int32
+}
+
+func (f *concurrentFixtureBars) Name() string { return f.name }
+func (f *concurrentFixtureBars) DailyBars(_ context.Context, instrument marketdata.Instrument, _, _ time.Time, _ marketdata.Adjustment) ([]marketdata.DailyBar, error) {
+	active := atomic.AddInt32(&f.active, 1)
+	for {
+		maximum := atomic.LoadInt32(&f.maxActive)
+		if active <= maximum || atomic.CompareAndSwapInt32(&f.maxActive, maximum, active) {
+			break
+		}
+	}
+	time.Sleep(10 * time.Millisecond)
+	atomic.AddInt32(&f.active, -1)
+	return f.byCode[instrument.CanonicalCode()], nil
+}
+
 func TestValidatedScreeningPersistsEvidenceBeforeProducingCandidates(t *testing.T) {
 	_, database := testStore(t)
 	if err := database.AutoMigrate(&models.AIAnalysisRun{}, &models.AIAnalysisJob{}); err != nil {
@@ -51,7 +73,7 @@ func TestValidatedScreeningPersistsEvidenceBeforeProducingCandidates(t *testing.
 	validationStore, _ := marketdata.NewValidationStore(database)
 	provider, err := NewValidatedScreeningProvider(fixtureScreeningUniverse{[]ScreeningUniverseItem{{
 		Identity: ScreeningIdentity{StockCode: "600000", StockName: "浦发银行"}, Instrument: instrument,
-	}}}, service, validationStore, 45)
+	}}}, service, validationStore, 45, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,13 +116,50 @@ func TestValidatedScreeningStopsWhenSourcesDisagree(t *testing.T) {
 	validationStore, _ := marketdata.NewValidationStore(database)
 	provider, _ := NewValidatedScreeningProvider(fixtureScreeningUniverse{[]ScreeningUniverseItem{{
 		Identity: ScreeningIdentity{StockCode: "600000", StockName: "浦发银行"}, Instrument: instrument,
-	}}}, service, validationStore, 45)
+	}}}, service, validationStore, 45, 2)
 	if _, err := provider.ScreeningRecords(context.Background(), tradeDate); err == nil {
 		t.Fatal("expected source disagreement to stop candidate production")
 	}
 	var batch models.MarketDataValidationBatch
 	if err := database.Order("id DESC").First(&batch).Error; err != nil || batch.Status != marketdata.ValidationStatusFailed || batch.ReleasedBars != 0 {
 		t.Fatalf("failed reconciliation evidence was not retained: %+v %v", batch, err)
+	}
+}
+
+func TestValidatedScreeningUsesExplicitBoundedConcurrency(t *testing.T) {
+	_, database := testStore(t)
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	tradeDate := time.Date(2026, 8, 19, 15, 30, 0, 0, location)
+	shanghai := marketdata.Instrument{Code: "600000", Exchange: marketdata.ExchangeShanghai, SecurityType: marketdata.SecurityStock}
+	shenzhen := marketdata.Instrument{Code: "000001", Exchange: marketdata.ExchangeShenzhen, SecurityType: marketdata.SecurityStock}
+	dates, shPrimary, shReference := screeningValidationFixtures(shanghai, tradeDate, 25)
+	_, szPrimary, szReference := screeningValidationFixtures(shenzhen, tradeDate, 25)
+	primary := &concurrentFixtureBars{name: "concurrent-primary", byCode: map[string][]marketdata.DailyBar{
+		shanghai.CanonicalCode(): withBarSource(shPrimary, "concurrent-primary"), shenzhen.CanonicalCode(): withBarSource(szPrimary, "concurrent-primary"),
+	}}
+	reference := &concurrentFixtureBars{name: "concurrent-reference", byCode: map[string][]marketdata.DailyBar{
+		shanghai.CanonicalCode(): withBarSource(shReference, "concurrent-reference"), shenzhen.CanonicalCode(): withBarSource(szReference, "concurrent-reference"),
+	}}
+	service, _ := marketdata.NewEndOfDayValidationService(fixtureCalendar{dates}, primary, reference,
+		marketdata.ReconciliationPolicy{Location: location, CloseAbsoluteTolerance: 0.001, RequireIndependentSources: true})
+	validationStore, _ := marketdata.NewValidationStore(database)
+	provider, err := NewValidatedScreeningProvider(fixtureScreeningUniverse{[]ScreeningUniverseItem{
+		{Identity: ScreeningIdentity{StockCode: "600000", StockName: "浦发银行"}, Instrument: shanghai},
+		{Identity: ScreeningIdentity{StockCode: "000001", StockName: "平安银行"}, Instrument: shenzhen},
+	}}, service, validationStore, 45, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := provider.ScreeningRecords(context.Background(), tradeDate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 2 || atomic.LoadInt32(&primary.maxActive) != 2 || atomic.LoadInt32(&reference.maxActive) != 2 {
+		t.Fatalf("bounded validation did not run two instruments concurrently: records=%d primary=%d reference=%d",
+			len(records), primary.maxActive, reference.maxActive)
+	}
+	if _, err := NewValidatedScreeningProvider(fixtureScreeningUniverse{}, service, validationStore, 45, 33); err == nil {
+		t.Fatal("expected excessive screening concurrency rejection")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"go-stock/backend/marketdata"
@@ -29,13 +30,14 @@ type ValidatedScreeningProvider struct {
 	validation   *marketdata.EndOfDayValidationService
 	store        *marketdata.ValidationStore
 	lookbackDays int
+	concurrency  int
 }
 
-func NewValidatedScreeningProvider(universe ScreeningUniverse, validation *marketdata.EndOfDayValidationService, store *marketdata.ValidationStore, lookbackDays int) (*ValidatedScreeningProvider, error) {
-	if universe == nil || validation == nil || store == nil || lookbackDays < 30 {
-		return nil, errors.New("validated screening requires universe, validation service, store, and at least 30 lookback days")
+func NewValidatedScreeningProvider(universe ScreeningUniverse, validation *marketdata.EndOfDayValidationService, store *marketdata.ValidationStore, lookbackDays, concurrency int) (*ValidatedScreeningProvider, error) {
+	if universe == nil || validation == nil || store == nil || lookbackDays < 30 || concurrency <= 0 || concurrency > 32 {
+		return nil, errors.New("validated screening requires universe, validation service, store, at least 30 lookback days, and concurrency 1-32")
 	}
-	return &ValidatedScreeningProvider{universe: universe, validation: validation, store: store, lookbackDays: lookbackDays}, nil
+	return &ValidatedScreeningProvider{universe: universe, validation: validation, store: store, lookbackDays: lookbackDays, concurrency: concurrency}, nil
 }
 
 func (p *ValidatedScreeningProvider) ScreeningRecords(ctx context.Context, tradeDate time.Time) ([]ScreeningRecord, error) {
@@ -50,7 +52,6 @@ func (p *ValidatedScreeningProvider) ScreeningRecords(ctx context.Context, trade
 		return nil, errors.New("screening universe is empty")
 	}
 	start := tradeDate.AddDate(0, 0, -p.lookbackDays)
-	records := make([]ScreeningRecord, 0, len(items))
 	seen := make(map[string]bool, len(items))
 	for _, item := range items {
 		code := strings.TrimSpace(item.Identity.StockCode)
@@ -58,24 +59,67 @@ func (p *ValidatedScreeningProvider) ScreeningRecords(ctx context.Context, trade
 			return nil, errors.New("screening universe contains incomplete or duplicate identity")
 		}
 		seen[code] = true
-		result, err := p.validation.Validate(ctx, item.Instrument, start, tradeDate)
-		if err != nil {
-			return nil, fmt.Errorf("validate screening market data for %s: %w", code, err)
+	}
+	type validationOutcome struct {
+		result marketdata.EndOfDayValidationResult
+		err    error
+	}
+	outcomes := make([]validationOutcome, len(items))
+	work := make(chan int)
+	var workers sync.WaitGroup
+	workerCount := min(p.concurrency, len(items))
+	for worker := 0; worker < workerCount; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range work {
+				outcomes[index].result, outcomes[index].err = p.validation.Validate(ctx, items[index].Instrument, start, tradeDate)
+			}
+		}()
+	}
+	for index := range items {
+		work <- index
+	}
+	close(work)
+	workers.Wait()
+
+	records := make([]ScreeningRecord, 0, len(items))
+	var firstFailure error
+	for index, item := range items {
+		code := strings.TrimSpace(item.Identity.StockCode)
+		if outcomes[index].err != nil {
+			if firstFailure == nil {
+				firstFailure = fmt.Errorf("validate screening market data for %s: %w", code, outcomes[index].err)
+			}
+			continue
 		}
+		result := outcomes[index].result
 		batch, err := p.store.Save(result)
 		if err != nil {
-			return nil, fmt.Errorf("persist screening validation for %s: %w", code, err)
+			if firstFailure == nil {
+				firstFailure = fmt.Errorf("persist screening validation for %s: %w", code, err)
+			}
+			continue
 		}
 		if !result.Passed() {
-			return nil, fmt.Errorf("screening market data for %s failed dual-source reconciliation (batch %d)", code, batch.ID)
+			if firstFailure == nil {
+				firstFailure = fmt.Errorf("screening market data for %s failed dual-source reconciliation (batch %d)", code, batch.ID)
+			}
+			continue
 		}
 		identity := item.Identity
 		identity.ValidationBatchID = batch.ID
 		record, err := BuildScreeningRecord(identity, result.ValidatedBars, result.Reconciliation.ExpectedDates, result.ValidatedAt, result.ValidatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("build verified screening record for %s: %w", code, err)
+			if firstFailure == nil {
+				firstFailure = fmt.Errorf("build verified screening record for %s: %w", code, err)
+			}
+			continue
 		}
 		records = append(records, record)
+	}
+	if firstFailure != nil {
+		return nil, firstFailure
 	}
 	return records, nil
 }
