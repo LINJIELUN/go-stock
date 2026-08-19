@@ -3,6 +3,7 @@ package recommendation
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go-stock/backend/models"
@@ -15,6 +16,7 @@ import (
 type ShadowReport struct {
 	WindowStart              time.Time `json:"windowStart"`
 	WindowEnd                time.Time `json:"windowEnd"`
+	StrategyVersion          string    `json:"strategyVersion"`
 	GeneratedSnapshots       int       `json:"generatedSnapshots"`
 	CompletedReviews         int       `json:"completedReviews"`
 	DelayedReviews           int       `json:"delayedReviews"`
@@ -37,14 +39,15 @@ func NewShadowReportStore(db *gorm.DB) (*ShadowReportStore, error) {
 	return &ShadowReportStore{db: db}, nil
 }
 
-func (s *ShadowReportStore) Build(start, end time.Time) (ShadowReport, error) {
-	report := ShadowReport{WindowStart: start, WindowEnd: end}
-	if start.IsZero() || end.IsZero() || !start.Before(end) {
-		return report, errors.New("shadow report requires an ordered non-empty time window")
+func (s *ShadowReportStore) Build(start, end time.Time, strategyVersion string) (ShadowReport, error) {
+	strategyVersion = strings.TrimSpace(strategyVersion)
+	report := ShadowReport{WindowStart: start, WindowEnd: end, StrategyVersion: strategyVersion}
+	if start.IsZero() || end.IsZero() || !start.Before(end) || strategyVersion == "" {
+		return report, errors.New("shadow report requires an ordered non-empty time window and strategy version")
 	}
 	var snapshots []models.AIRecommendationSnapshot
-	if err := s.db.Where("source_type = ? AND status = ? AND completed_at >= ? AND completed_at < ?",
-		SourceAutomatic, RecommendationStatusShadow, start, end).Find(&snapshots).Error; err != nil {
+	if err := s.db.Where("source_type = ? AND status = ? AND strategy_version = ? AND completed_at >= ? AND completed_at < ?",
+		SourceAutomatic, RecommendationStatusShadow, strategyVersion, start, end).Find(&snapshots).Error; err != nil {
 		return report, fmt.Errorf("load shadow snapshots: %w", err)
 	}
 	report.GeneratedSnapshots = len(snapshots)

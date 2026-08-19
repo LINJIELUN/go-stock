@@ -14,9 +14,10 @@ func TestShadowReportBuildsReviewAndCostMetricsWithoutPromotionDecision(t *testi
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	snapshots := []models.AIRecommendationSnapshot{
-		shadowReportSnapshot(1, "600000", RecommendationStatusShadow, now.Add(-48*time.Hour)),
-		shadowReportSnapshot(2, "600001", RecommendationStatusShadow, now.Add(-24*time.Hour)),
-		shadowReportSnapshot(3, "600002", RecommendationStatusActive, now.Add(-24*time.Hour)),
+		shadowReportSnapshot(1, "600000", StrategyVersion, RecommendationStatusShadow, now.Add(-48*time.Hour)),
+		shadowReportSnapshot(2, "600001", StrategyVersion, RecommendationStatusShadow, now.Add(-24*time.Hour)),
+		shadowReportSnapshot(3, "600002", StrategyVersion, RecommendationStatusActive, now.Add(-24*time.Hour)),
+		shadowReportSnapshot(4, "600003", "older-strategy", RecommendationStatusShadow, now.Add(-24*time.Hour)),
 	}
 	for index := range snapshots {
 		if err := database.Create(&snapshots[index]).Error; err != nil {
@@ -48,11 +49,11 @@ func TestShadowReportBuildsReviewAndCostMetricsWithoutPromotionDecision(t *testi
 		t.Fatal(err)
 	}
 	store, _ := NewShadowReportStore(database)
-	report, err := store.Build(now.Add(-72*time.Hour), now)
+	report, err := store.Build(now.Add(-72*time.Hour), now, StrategyVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.GeneratedSnapshots != 2 || report.CompletedReviews != 2 || report.PendingReviews != 0 || report.DirectionHitRatePercent == nil ||
+	if report.StrategyVersion != StrategyVersion || report.GeneratedSnapshots != 2 || report.CompletedReviews != 2 || report.PendingReviews != 0 || report.DirectionHitRatePercent == nil ||
 		*report.DirectionHitRatePercent != 50 || report.RangeHitRatePercent == nil || *report.RangeHitRatePercent != 50 ||
 		report.MeanActualReturnPercent == nil || *report.MeanActualReturnPercent != 0.5 || report.MeanOutsideDeviation == nil ||
 		*report.MeanOutsideDeviation != 1.5 || report.SettledModelCostUSD != 0.25 || report.CommittedModelCostUSD != 0.65 || report.UncertainModelUsageCount != 1 {
@@ -61,12 +62,12 @@ func TestShadowReportBuildsReviewAndCostMetricsWithoutPromotionDecision(t *testi
 	if err := database.Model(&models.AIModelUsage{}).Where("id = ?", usages[0].ID).Update("actual_cost_usd", nil).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Build(now.Add(-72*time.Hour), now); err == nil {
+	if _, err := store.Build(now.Add(-72*time.Hour), now, StrategyVersion); err == nil {
 		t.Fatal("settled usage without actual cost must make the report fail closed")
 	}
 }
 
-func shadowReportSnapshot(batchID uint, stockCode, status string, completedAt time.Time) models.AIRecommendationSnapshot {
+func shadowReportSnapshot(batchID uint, stockCode, strategyVersion, status string, completedAt time.Time) models.AIRecommendationSnapshot {
 	return models.AIRecommendationSnapshot{
 		SourceType:          SourceAutomatic,
 		ValidationBatchID:   batchID,
@@ -78,7 +79,7 @@ func shadowReportSnapshot(batchID uint, stockCode, status string, completedAt ti
 		BaselineMarketTime:  completedAt,
 		ScoreComponentsJSON: "{}",
 		ModelVersion:        "test-model",
-		StrategyVersion:     StrategyVersion,
+		StrategyVersion:     strategyVersion,
 		ReviewDueDate:       completedAt.AddDate(0, 0, 10),
 		Status:              status,
 	}
@@ -88,11 +89,14 @@ func TestShadowReportLeavesRatesUnavailableWithoutCompletedReviews(t *testing.T)
 	_, database := testStore(t)
 	store, _ := NewShadowReportStore(database)
 	now := time.Now().UTC()
-	report, err := store.Build(now.Add(-time.Hour), now)
+	report, err := store.Build(now.Add(-time.Hour), now, StrategyVersion)
 	if err != nil || report.DirectionHitRatePercent != nil || report.RangeHitRatePercent != nil {
 		t.Fatalf("empty report must not imply zero hit rate: %+v %v", report, err)
 	}
-	if _, err := store.Build(now, now); err == nil {
+	if _, err := store.Build(now, now, StrategyVersion); err == nil {
 		t.Fatal("expected invalid report window rejection")
+	}
+	if _, err := store.Build(now.Add(-time.Hour), now, " "); err == nil {
+		t.Fatal("expected missing strategy version rejection")
 	}
 }
