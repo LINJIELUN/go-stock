@@ -5,6 +5,7 @@ import {data} from '../models';
 import {context} from '../models';
 import {main} from '../models';
 import {lo} from '../models';
+import {recommendation} from '../models';
 
 export function AbortChatWithAgent():Promise<void>;
 
@@ -109,6 +110,8 @@ export function FollowFund(arg1:string):Promise<string>;
 export function GetAIResponseResult(arg1:string):Promise<models.AIResponseResult>;
 
 export function GetAIResponseResultList(arg1:models.AIResponseResultQuery):Promise<models.AIResponseResultPageData>;
+
+export function GetAIShadowReport(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<recommendation.ShadowReport>;
 
 export function GetAiAssistantSession(arg1:string):Promise<models.AiAssistantSessionResp>;
 

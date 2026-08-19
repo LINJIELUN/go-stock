@@ -2039,6 +2039,65 @@ export namespace main {
 
 }
 
+export namespace recommendation {
+
+	export class ShadowReport {
+	    windowStart: any;
+	    windowEnd: any;
+	    strategyVersion: string;
+	    modelVersion: string;
+	    promptVersion: string;
+	    generatedSnapshots: number;
+	    completedReviews: number;
+	    delayedReviews: number;
+	    pendingReviews: number;
+	    directionHitRatePercent?: number;
+	    rangeHitRatePercent?: number;
+	    meanActualReturnPercent?: number;
+	    meanOutsideDeviation?: number;
+	    settledModelCostUsd: number;
+	    committedModelCostUsd: number;
+	    uncertainModelUsageCount: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ShadowReport(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.windowStart = this.convertValues(source["windowStart"], null);
+	        this.windowEnd = this.convertValues(source["windowEnd"], null);
+	        this.strategyVersion = source["strategyVersion"];
+	        this.modelVersion = source["modelVersion"];
+	        this.promptVersion = source["promptVersion"];
+	        this.generatedSnapshots = source["generatedSnapshots"];
+	        this.completedReviews = source["completedReviews"];
+	        this.delayedReviews = source["delayedReviews"];
+	        this.pendingReviews = source["pendingReviews"];
+	        this.directionHitRatePercent = source["directionHitRatePercent"];
+	        this.rangeHitRatePercent = source["rangeHitRatePercent"];
+	        this.meanActualReturnPercent = source["meanActualReturnPercent"];
+	        this.meanOutsideDeviation = source["meanOutsideDeviation"];
+	        this.settledModelCostUsd = source["settledModelCostUsd"];
+	        this.committedModelCostUsd = source["committedModelCostUsd"];
+	        this.uncertainModelUsageCount = source["uncertainModelUsageCount"];
+	    }
+
+	    convertValues(a: any, classs: any, asMap: boolean = false): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        if (typeof a === "object") {
+	            if (asMap) {
+	                for (const key of Object.keys(a)) a[key] = new classs(a[key]);
+	                return a;
+	            }
+	            return new classs(a);
+	        }
+	        return a;
+	    }
+	}
+}
+
 export namespace models {
 	
 	export class AIResponseResult {
@@ -3711,4 +3770,3 @@ export namespace models {
 	}
 
 }
-

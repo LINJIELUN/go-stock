@@ -17,6 +17,8 @@ type ShadowReport struct {
 	WindowStart              time.Time `json:"windowStart"`
 	WindowEnd                time.Time `json:"windowEnd"`
 	StrategyVersion          string    `json:"strategyVersion"`
+	ModelVersion             string    `json:"modelVersion"`
+	PromptVersion            string    `json:"promptVersion"`
 	GeneratedSnapshots       int       `json:"generatedSnapshots"`
 	CompletedReviews         int       `json:"completedReviews"`
 	DelayedReviews           int       `json:"delayedReviews"`
@@ -39,15 +41,20 @@ func NewShadowReportStore(db *gorm.DB) (*ShadowReportStore, error) {
 	return &ShadowReportStore{db: db}, nil
 }
 
-func (s *ShadowReportStore) Build(start, end time.Time, strategyVersion string) (ShadowReport, error) {
+func (s *ShadowReportStore) Build(start, end time.Time, strategyVersion, modelVersion, promptVersion string) (ShadowReport, error) {
 	strategyVersion = strings.TrimSpace(strategyVersion)
-	report := ShadowReport{WindowStart: start, WindowEnd: end, StrategyVersion: strategyVersion}
-	if start.IsZero() || end.IsZero() || !start.Before(end) || strategyVersion == "" {
-		return report, errors.New("shadow report requires an ordered non-empty time window and strategy version")
+	modelVersion = strings.TrimSpace(modelVersion)
+	promptVersion = strings.TrimSpace(promptVersion)
+	report := ShadowReport{
+		WindowStart: start, WindowEnd: end, StrategyVersion: strategyVersion,
+		ModelVersion: modelVersion, PromptVersion: promptVersion,
+	}
+	if start.IsZero() || end.IsZero() || !start.Before(end) || strategyVersion == "" || modelVersion == "" || promptVersion == "" {
+		return report, errors.New("shadow report requires an ordered non-empty time window and complete strategy, model, and prompt identity")
 	}
 	var snapshots []models.AIRecommendationSnapshot
-	if err := s.db.Where("source_type = ? AND status = ? AND strategy_version = ? AND completed_at >= ? AND completed_at < ?",
-		SourceAutomatic, RecommendationStatusShadow, strategyVersion, start, end).Find(&snapshots).Error; err != nil {
+	if err := s.db.Where("source_type = ? AND status = ? AND strategy_version = ? AND model_version = ? AND prompt_version = ? AND completed_at >= ? AND completed_at < ?",
+		SourceAutomatic, RecommendationStatusShadow, strategyVersion, modelVersion, promptVersion, start, end).Find(&snapshots).Error; err != nil {
 		return report, fmt.Errorf("load shadow snapshots: %w", err)
 	}
 	report.GeneratedSnapshots = len(snapshots)

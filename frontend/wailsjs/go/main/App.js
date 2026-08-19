@@ -210,6 +210,10 @@ export function GetAIResponseResultList(arg1) {
   return window['go']['main']['App']['GetAIResponseResultList'](arg1);
 }
 
+export function GetAIShadowReport(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetAIShadowReport'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function GetAiAssistantSession(arg1) {
   return window['go']['main']['App']['GetAiAssistantSession'](arg1);
 }

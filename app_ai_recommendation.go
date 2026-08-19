@@ -12,11 +12,11 @@ import (
 // GetAIShadowReport exposes read-only shadow evidence to the desktop client.
 // Both boundaries require an explicit RFC3339 offset so the selected cohort is
 // reproducible regardless of the machine's local timezone.
-func (a *App) GetAIShadowReport(startRFC3339, endRFC3339, strategyVersion string) (recommendation.ShadowReport, error) {
-	return buildAIShadowReport(db.Dao, startRFC3339, endRFC3339, strategyVersion)
+func (a *App) GetAIShadowReport(startRFC3339, endRFC3339, strategyVersion, modelVersion, promptVersion string) (recommendation.ShadowReport, error) {
+	return buildAIShadowReport(db.Dao, startRFC3339, endRFC3339, strategyVersion, modelVersion, promptVersion)
 }
 
-func buildAIShadowReport(database *gorm.DB, startRFC3339, endRFC3339, strategyVersion string) (recommendation.ShadowReport, error) {
+func buildAIShadowReport(database *gorm.DB, startRFC3339, endRFC3339, strategyVersion, modelVersion, promptVersion string) (recommendation.ShadowReport, error) {
 	start, err := time.Parse(time.RFC3339Nano, startRFC3339)
 	if err != nil {
 		return recommendation.ShadowReport{}, fmt.Errorf("parse shadow report start as RFC3339: %w", err)
@@ -29,5 +29,5 @@ func buildAIShadowReport(database *gorm.DB, startRFC3339, endRFC3339, strategyVe
 	if err != nil {
 		return recommendation.ShadowReport{}, err
 	}
-	return store.Build(start.UTC(), end.UTC(), strategyVersion)
+	return store.Build(start.UTC(), end.UTC(), strategyVersion, modelVersion, promptVersion)
 }
