@@ -38,6 +38,20 @@ func TestCalculateIndexClampsAndRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestCalculateReturnOpportunityRewardsMidpointAndPenalizesWidth(t *testing.T) {
+	narrow, err := CalculateReturnOpportunity(2, 4)
+	if err != nil || narrow != 61 {
+		t.Fatalf("unexpected narrow opportunity: %v %v", narrow, err)
+	}
+	wide, err := CalculateReturnOpportunity(-3, 8)
+	if err != nil || wide != 40.5 || wide >= narrow {
+		t.Fatalf("unexpected wide opportunity: %v %v", wide, err)
+	}
+	if _, err := CalculateReturnOpportunity(2, -2); err == nil {
+		t.Fatal("expected inverted range rejection")
+	}
+}
+
 func TestSelectDailyRecommendationsEnforcesRiskCaps(t *testing.T) {
 	candidates := []Candidate{
 		{ID: 1, Index: 99, IsST: true, IsNewStock: true},

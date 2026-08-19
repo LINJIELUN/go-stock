@@ -89,14 +89,15 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 	if err := validateAnalysisEvidenceProvenance(output.Evidence, frozen); err != nil {
 		return nil, err
 	}
-	if err := validateAuthoritativeScoreInputs(output, frozen); err != nil {
-		return nil, err
-	}
-	score, err := CalculateIndex(output.ScoreComponents, output.Penalties)
+	components, err := authoritativeScoreComponents(output, frozen)
 	if err != nil {
 		return nil, err
 	}
-	components, _ := json.Marshal(output.ScoreComponents)
+	score, err := CalculateIndex(components, output.Penalties)
+	if err != nil {
+		return nil, err
+	}
+	componentsJSON, _ := json.Marshal(components)
 	penalties, _ := json.Marshal(output.Penalties)
 	labels, _ := json.Marshal(output.RiskLabels)
 	evidence, _ := json.Marshal(output.Evidence)
@@ -106,31 +107,29 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 		StockCode: context.Job.StockCode, StockName: context.StockName, RiskLabelsJSON: string(labels), CompletedAt: context.CompletedAt,
 		DataAsOf: context.DataAsOf, BaselinePrice: context.BaselinePrice, BaselineMarketTime: context.BaselineMarketTime,
 		RiseProbability: output.RiseProbability, ReturnRangeLow: output.ReturnRangeLow, ReturnRangeHigh: output.ReturnRangeHigh,
-		AIRecommendationIndex: score.Index, ScoreComponentsJSON: string(components), PenaltiesJSON: string(penalties),
+		AIRecommendationIndex: score.Index, ScoreComponentsJSON: string(componentsJSON), PenaltiesJSON: string(penalties),
 		Rationale: strings.TrimSpace(output.Rationale), RiskNotes: strings.TrimSpace(output.RiskNotes), ModelVersion: context.ModelVersion,
 		PromptVersion: context.PromptVersion, ProbabilityNotice: ProbabilityNotice, EvidenceJSON: string(evidence), AgentConclusionsJSON: string(conclusions),
 		StrategyVersion: score.StrategyVersion, ReviewDueDate: context.ReviewDueDate, Status: "active"}, nil
 }
 
-func validateAuthoritativeScoreInputs(output StructuredAnalysisOutput, frozen frozenAnalysisInput) error {
+func authoritativeScoreComponents(output StructuredAnalysisOutput, frozen frozenAnalysisInput) (ScoreComponents, error) {
 	var screening screeningEvidence
 	decoder := json.NewDecoder(bytes.NewReader(frozen.Screening))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&screening); err != nil || ensureJSONEOF(decoder) != nil || screening.Version != PreScreeningVersion {
-		return errors.New("frozen screening score evidence is invalid")
+		return ScoreComponents{}, errors.New("frozen screening score evidence is invalid")
 	}
-	if output.ScoreComponents.RiseProbability != output.RiseProbability ||
-		output.ScoreComponents.VolatilitySafety != screening.RiskSafety ||
-		output.ScoreComponents.Liquidity != screening.Liquidity ||
-		output.ScoreComponents.DataQuality != screening.DataQuality {
-		return errors.New("model score components conflict with authoritative inputs")
+	returnOpportunity, err := CalculateReturnOpportunity(output.ReturnRangeLow, output.ReturnRangeHigh)
+	if err != nil {
+		return ScoreComponents{}, err
 	}
 	expectedLabels := append([]string(nil), frozen.RiskLabels...)
 	actualLabels := append([]string(nil), output.RiskLabels...)
 	sort.Strings(expectedLabels)
 	sort.Strings(actualLabels)
 	if !slices.Equal(expectedLabels, actualLabels) {
-		return errors.New("model risk labels conflict with frozen inputs")
+		return ScoreComponents{}, errors.New("model risk labels conflict with frozen inputs")
 	}
 	allowedPenalties := make(map[string]struct{}, len(expectedLabels))
 	for _, label := range expectedLabels {
@@ -138,10 +137,12 @@ func validateAuthoritativeScoreInputs(output StructuredAnalysisOutput, frozen fr
 	}
 	for _, penalty := range output.Penalties {
 		if _, exists := allowedPenalties[penalty.Code]; !exists {
-			return fmt.Errorf("model penalty %s is not backed by a frozen risk label", penalty.Code)
+			return ScoreComponents{}, fmt.Errorf("model penalty %s is not backed by a frozen risk label", penalty.Code)
 		}
 	}
-	return nil
+	return ScoreComponents{RiseProbability: output.RiseProbability, ReturnOpportunity: returnOpportunity,
+		VolatilitySafety: screening.RiskSafety, Liquidity: screening.Liquidity,
+		AgentConsensus: SingleCallConsensusScore, DataQuality: screening.DataQuality}, nil
 }
 
 func validateAnalysisEvidenceProvenance(evidence []AnalysisEvidence, frozen frozenAnalysisInput) error {

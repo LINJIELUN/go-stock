@@ -8,6 +8,7 @@ import (
 )
 
 const StrategyVersion = "ai-recommendation-index-v0.1"
+const SingleCallConsensusScore = 50.0
 
 type ScoreComponents struct {
 	RiseProbability   float64 `json:"riseProbability"`
@@ -77,6 +78,17 @@ func CalculateIndex(components ScoreComponents, penalties []Penalty) (ScoreResul
 		PenaltyPoints:   round(penaltyPoints, 4),
 		Index:           index,
 	}, nil
+}
+
+// CalculateReturnOpportunity is a transparent shadow-run heuristic until
+// reviewed samples support rolling-percentile calibration. A positive interval
+// midpoint helps, while uncertainty expressed as interval width reduces score.
+func CalculateReturnOpportunity(low, high float64) (float64, error) {
+	if math.IsNaN(low) || math.IsInf(low, 0) || math.IsNaN(high) || math.IsInf(high, 0) || low > high {
+		return 0, errors.New("predicted return interval is invalid")
+	}
+	midpoint, width := (low+high)/2, high-low
+	return round(clamp(50+5*midpoint-2*width, 0, 100), 4), nil
 }
 
 type Candidate struct {

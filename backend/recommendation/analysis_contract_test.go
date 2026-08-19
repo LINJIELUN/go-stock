@@ -54,7 +54,7 @@ func TestCompileStructuredAnalysisUsesAuthoritativeContextAndCalculatesIndex(t *
 		t.Fatal(err)
 	}
 	if snapshot.StockCode != context.Job.StockCode || snapshot.ValidationBatchID != context.Job.ValidationBatchID ||
-		snapshot.BaselinePrice != 10 || snapshot.AIRecommendationIndex != 66 || snapshot.ProbabilityNotice != ProbabilityNotice ||
+		snapshot.BaselinePrice != 10 || snapshot.AIRecommendationIndex != 58 || snapshot.ProbabilityNotice != ProbabilityNotice ||
 		snapshot.ModelVersion != "provider/model-v1" || snapshot.PromptVersion != "prompt-v1" {
 		t.Fatalf("unexpected compiled snapshot: %+v", snapshot)
 	}
@@ -145,15 +145,23 @@ func TestCompileStructuredAnalysisAcceptsDeterministicDailyBarEvidence(t *testin
 	}
 }
 
-func TestCompileStructuredAnalysisRejectsModelControlledAuthoritativeScores(t *testing.T) {
+func TestCompileStructuredAnalysisOverridesModelControlledScores(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	context := validAnalysisContext(now)
 	var output StructuredAnalysisOutput
 	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
 	output.ScoreComponents.Liquidity = 100
+	output.ScoreComponents.ReturnOpportunity = 100
+	output.ScoreComponents.AgentConsensus = 100
 	raw, _ := json.Marshal(output)
-	if _, err := CompileStructuredAnalysis(raw, context); err == nil || !strings.Contains(err.Error(), "authoritative inputs") {
-		t.Fatalf("expected model-controlled liquidity rejection: %v", err)
+	snapshot, err := CompileStructuredAnalysis(raw, context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var components ScoreComponents
+	json.Unmarshal([]byte(snapshot.ScoreComponentsJSON), &components)
+	if components.Liquidity != 80 || components.ReturnOpportunity != 40.5 || components.AgentConsensus != SingleCallConsensusScore {
+		t.Fatalf("model-controlled scores were not replaced: %+v", components)
 	}
 	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
 	output.RiskLabels = []string{"ST"}
