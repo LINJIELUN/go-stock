@@ -43,6 +43,7 @@ func validSnapshot(now time.Time) *models.AIRecommendationSnapshot {
 		BaselineMarketTime: now, RiseProbability: 65, ReturnRangeLow: -2,
 		ReturnRangeHigh: 8, AIRecommendationIndex: 70, ScoreComponentsJSON: `{ "dataQuality": 80 }`,
 		PenaltiesJSON: "[]", ModelVersion: "test-model", StrategyVersion: StrategyVersion,
+		PromptVersion: "test-prompt", ProbabilityNotice: ProbabilityNotice, EvidenceJSON: `[]`, AgentConclusionsJSON: `{}`,
 		ReviewDueDate: now.AddDate(0, 0, 10), Status: "active",
 	}
 }

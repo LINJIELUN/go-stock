@@ -152,8 +152,8 @@ func validateSnapshot(snapshot *models.AIRecommendationSnapshot) error {
 	if snapshot.ReviewDueDate.Before(snapshot.CompletedAt) {
 		return errors.New("review due date cannot precede analysis completion")
 	}
-	if snapshot.ModelVersion == "" || snapshot.StrategyVersion == "" || snapshot.Status == "" {
-		return errors.New("model version, strategy version, and status are required")
+	if snapshot.ModelVersion == "" || snapshot.PromptVersion == "" || snapshot.StrategyVersion == "" || snapshot.Status == "" || snapshot.ProbabilityNotice == "" {
+		return errors.New("model, prompt, strategy, status, and probability notice are required")
 	}
 	if err := validJSONObject(snapshot.ScoreComponentsJSON); err != nil {
 		return fmt.Errorf("score components: %w", err)
@@ -163,6 +163,12 @@ func validateSnapshot(snapshot *models.AIRecommendationSnapshot) error {
 	}
 	if err := validJSONArray(snapshot.RiskLabelsJSON); err != nil {
 		return fmt.Errorf("risk labels: %w", err)
+	}
+	if err := validJSONArray(snapshot.EvidenceJSON); err != nil {
+		return fmt.Errorf("evidence: %w", err)
+	}
+	if err := validJSONObject(snapshot.AgentConclusionsJSON); err != nil {
+		return fmt.Errorf("agent conclusions: %w", err)
 	}
 	return nil
 }

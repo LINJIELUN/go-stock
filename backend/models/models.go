@@ -1152,6 +1152,10 @@ type AIRecommendationSnapshot struct {
 	Rationale             string    `json:"rationale" gorm:"type:text"`
 	RiskNotes             string    `json:"riskNotes" gorm:"type:text"`
 	ModelVersion          string    `json:"modelVersion" gorm:"size:100;not null"`
+	PromptVersion         string    `json:"promptVersion" gorm:"size:100;not null;default:'legacy-unknown'"`
+	ProbabilityNotice     string    `json:"probabilityNotice" gorm:"size:100;not null;default:'模型估计、非实际结果'"`
+	EvidenceJSON          string    `json:"evidenceJson" gorm:"type:text;not null;default:'[]'"`
+	AgentConclusionsJSON  string    `json:"agentConclusionsJson" gorm:"type:text;not null;default:'{}'"`
 	StrategyVersion       string    `json:"strategyVersion" gorm:"size:100;not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
 	ReviewDueDate         time.Time `json:"reviewDueDate" gorm:"type:date;not null;index"`
 	Status                string    `json:"status" gorm:"size:30;not null;index"`
