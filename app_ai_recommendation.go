@@ -16,18 +16,44 @@ func (a *App) GetAIShadowReport(startRFC3339, endRFC3339, strategyVersion, model
 	return buildAIShadowReport(db.Dao, startRFC3339, endRFC3339, strategyVersion, modelVersion, promptVersion)
 }
 
-func buildAIShadowReport(database *gorm.DB, startRFC3339, endRFC3339, strategyVersion, modelVersion, promptVersion string) (recommendation.ShadowReport, error) {
-	start, err := time.Parse(time.RFC3339Nano, startRFC3339)
+// ListAIShadowCohorts lets the client discover reportable configurations
+// instead of guessing or hard-coding version identifiers.
+func (a *App) ListAIShadowCohorts(startRFC3339, endRFC3339 string) ([]recommendation.ShadowCohort, error) {
+	return listAIShadowCohorts(db.Dao, startRFC3339, endRFC3339)
+}
+
+func listAIShadowCohorts(database *gorm.DB, startRFC3339, endRFC3339 string) ([]recommendation.ShadowCohort, error) {
+	start, end, err := parseAIShadowWindow(startRFC3339, endRFC3339)
 	if err != nil {
-		return recommendation.ShadowReport{}, fmt.Errorf("parse shadow report start as RFC3339: %w", err)
+		return nil, err
 	}
-	end, err := time.Parse(time.RFC3339Nano, endRFC3339)
+	store, err := recommendation.NewShadowReportStore(database)
 	if err != nil {
-		return recommendation.ShadowReport{}, fmt.Errorf("parse shadow report end as RFC3339: %w", err)
+		return nil, err
+	}
+	return store.ListCohorts(start, end)
+}
+
+func buildAIShadowReport(database *gorm.DB, startRFC3339, endRFC3339, strategyVersion, modelVersion, promptVersion string) (recommendation.ShadowReport, error) {
+	start, end, err := parseAIShadowWindow(startRFC3339, endRFC3339)
+	if err != nil {
+		return recommendation.ShadowReport{}, err
 	}
 	store, err := recommendation.NewShadowReportStore(database)
 	if err != nil {
 		return recommendation.ShadowReport{}, err
 	}
-	return store.Build(start.UTC(), end.UTC(), strategyVersion, modelVersion, promptVersion)
+	return store.Build(start, end, strategyVersion, modelVersion, promptVersion)
+}
+
+func parseAIShadowWindow(startRFC3339, endRFC3339 string) (time.Time, time.Time, error) {
+	start, err := time.Parse(time.RFC3339Nano, startRFC3339)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("parse shadow report start as RFC3339: %w", err)
+	}
+	end, err := time.Parse(time.RFC3339Nano, endRFC3339)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("parse shadow report end as RFC3339: %w", err)
+	}
+	return start.UTC(), end.UTC(), nil
 }

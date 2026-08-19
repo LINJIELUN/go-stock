@@ -2041,6 +2041,29 @@ export namespace main {
 
 export namespace recommendation {
 
+	export class ShadowCohort {
+	    strategyVersion: string;
+	    modelVersion: string;
+	    promptVersion: string;
+	    generatedSnapshots: number;
+	    firstCompletedAt: any;
+	    lastCompletedAt: any;
+
+	    static createFrom(source: any = {}) {
+	        return new ShadowCohort(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.strategyVersion = source["strategyVersion"];
+	        this.modelVersion = source["modelVersion"];
+	        this.promptVersion = source["promptVersion"];
+	        this.generatedSnapshots = source["generatedSnapshots"];
+	        this.firstCompletedAt = source["firstCompletedAt"];
+	        this.lastCompletedAt = source["lastCompletedAt"];
+	    }
+	}
+
 	export class ShadowReport {
 	    windowStart: any;
 	    windowEnd: any;

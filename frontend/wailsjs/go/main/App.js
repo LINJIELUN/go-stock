@@ -694,6 +694,10 @@ export function IsUSTradingTime() {
   return window['go']['main']['App']['IsUSTradingTime']();
 }
 
+export function ListAIShadowCohorts(arg1, arg2) {
+  return window['go']['main']['App']['ListAIShadowCohorts'](arg1, arg2);
+}
+
 export function LongTigerRank(arg1) {
   return window['go']['main']['App']['LongTigerRank'](arg1);
 }

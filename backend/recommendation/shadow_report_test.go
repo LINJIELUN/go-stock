@@ -107,3 +107,30 @@ func TestShadowReportLeavesRatesUnavailableWithoutCompletedReviews(t *testing.T)
 		t.Fatal("expected incomplete cohort identity rejection")
 	}
 }
+
+func TestShadowReportListsComparableCohorts(t *testing.T) {
+	_, database := testStore(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	snapshots := []models.AIRecommendationSnapshot{
+		shadowReportSnapshot(11, "600010", StrategyVersion, "model-a", "prompt-a", RecommendationStatusShadow, now.Add(-3*time.Hour)),
+		shadowReportSnapshot(12, "600011", StrategyVersion, "model-a", "prompt-a", RecommendationStatusShadow, now.Add(-2*time.Hour)),
+		shadowReportSnapshot(13, "600012", StrategyVersion, "model-b", "prompt-a", RecommendationStatusShadow, now.Add(-time.Hour)),
+		shadowReportSnapshot(14, "600013", StrategyVersion, "model-c", "prompt-a", RecommendationStatusActive, now.Add(-time.Hour)),
+	}
+	if err := database.Create(&snapshots).Error; err != nil {
+		t.Fatal(err)
+	}
+	store, _ := NewShadowReportStore(database)
+	cohorts, err := store.ListCohorts(now.Add(-4*time.Hour), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cohorts) != 2 || cohorts[0].ModelVersion != "model-b" || cohorts[0].GeneratedSnapshots != 1 ||
+		cohorts[1].ModelVersion != "model-a" || cohorts[1].GeneratedSnapshots != 2 ||
+		!cohorts[1].FirstCompletedAt.Equal(now.Add(-3*time.Hour)) || !cohorts[1].LastCompletedAt.Equal(now.Add(-2*time.Hour)) {
+		t.Fatalf("unexpected shadow cohorts: %+v", cohorts)
+	}
+	if _, err := store.ListCohorts(now, now); err == nil {
+		t.Fatal("expected invalid cohort window rejection")
+	}
+}

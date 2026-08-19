@@ -37,6 +37,10 @@ func TestBuildAIShadowReportRequiresExplicitRFC3339Window(t *testing.T) {
 	if _, err := buildAIShadowReport(database, "2026-08-01", end.Format(time.RFC3339), recommendation.StrategyVersion, "test-model", "test-prompt"); err == nil || !strings.Contains(err.Error(), "RFC3339") {
 		t.Fatalf("expected explicit RFC3339 start rejection, got %v", err)
 	}
+	cohorts, err := listAIShadowCohorts(database, start.Format(time.RFC3339), end.Format(time.RFC3339))
+	if err != nil || len(cohorts) != 0 {
+		t.Fatalf("unexpected empty cohort listing: %+v %v", cohorts, err)
+	}
 }
 
 func TestBuildAIShadowReportRejectsUnavailableDatabase(t *testing.T) {

@@ -32,6 +32,17 @@ type ShadowReport struct {
 	UncertainModelUsageCount int       `json:"uncertainModelUsageCount"`
 }
 
+// ShadowCohort identifies one comparable automatic recommendation
+// configuration available for reporting.
+type ShadowCohort struct {
+	StrategyVersion    string    `json:"strategyVersion"`
+	ModelVersion       string    `json:"modelVersion"`
+	PromptVersion      string    `json:"promptVersion"`
+	GeneratedSnapshots int64     `json:"generatedSnapshots"`
+	FirstCompletedAt   time.Time `json:"firstCompletedAt"`
+	LastCompletedAt    time.Time `json:"lastCompletedAt"`
+}
+
 type ShadowReportStore struct{ db *gorm.DB }
 
 func NewShadowReportStore(db *gorm.DB) (*ShadowReportStore, error) {
@@ -39,6 +50,39 @@ func NewShadowReportStore(db *gorm.DB) (*ShadowReportStore, error) {
 		return nil, errors.New("shadow report store requires a database")
 	}
 	return &ShadowReportStore{db: db}, nil
+}
+
+func (s *ShadowReportStore) ListCohorts(start, end time.Time) ([]ShadowCohort, error) {
+	if start.IsZero() || end.IsZero() || !start.Before(end) {
+		return nil, errors.New("shadow cohort listing requires an ordered non-empty time window")
+	}
+	var snapshots []models.AIRecommendationSnapshot
+	err := s.db.Model(&models.AIRecommendationSnapshot{}).
+		Select("strategy_version, model_version, prompt_version, completed_at").
+		Where("source_type = ? AND status = ? AND completed_at >= ? AND completed_at < ?", SourceAutomatic, RecommendationStatusShadow, start, end).
+		Where("strategy_version <> '' AND model_version <> '' AND prompt_version <> ''").
+		Order("completed_at DESC, strategy_version ASC, model_version ASC, prompt_version ASC").
+		Find(&snapshots).Error
+	if err != nil {
+		return nil, fmt.Errorf("list shadow cohorts: %w", err)
+	}
+	cohorts := make([]ShadowCohort, 0)
+	indexes := make(map[string]int)
+	for _, snapshot := range snapshots {
+		key := snapshot.StrategyVersion + "\x00" + snapshot.ModelVersion + "\x00" + snapshot.PromptVersion
+		index, exists := indexes[key]
+		if !exists {
+			indexes[key] = len(cohorts)
+			cohorts = append(cohorts, ShadowCohort{
+				StrategyVersion: snapshot.StrategyVersion, ModelVersion: snapshot.ModelVersion, PromptVersion: snapshot.PromptVersion,
+				GeneratedSnapshots: 1, FirstCompletedAt: snapshot.CompletedAt, LastCompletedAt: snapshot.CompletedAt,
+			})
+			continue
+		}
+		cohorts[index].GeneratedSnapshots++
+		cohorts[index].FirstCompletedAt = snapshot.CompletedAt
+	}
+	return cohorts, nil
 }
 
 func (s *ShadowReportStore) Build(start, end time.Time, strategyVersion, modelVersion, promptVersion string) (ShadowReport, error) {
