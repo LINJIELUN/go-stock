@@ -29,8 +29,7 @@ class ProviderHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         analysis = {
-            "schemaVersion": "trading-analysis-output-v0.2",
-            "probabilityNotice": "模型估计、非实际结果",
+            "schemaVersion": "trading-analysis-output-v0.3",
             "riseProbability": 55,
         }
         response = {"choices": [{"message": {"content": json.dumps(analysis)}}]}
@@ -90,6 +89,8 @@ class WorkerTests(unittest.TestCase):
         system_message = ProviderHandler.request_body["messages"][0]["content"]
         self.assertNotIn("scoreComponents", system_message)
         self.assertNotIn("penalties", system_message)
+        self.assertNotIn("riskLabels", system_message)
+        self.assertNotIn("probabilityNotice", system_message)
 
     def test_rejects_model_mismatch_without_provider_request(self):
         ProviderHandler.request_body = None

@@ -54,6 +54,7 @@ evidence title. Models can copy both values from the bundle, while the Go
 compiler still verifies the exact ID, title, source, and trade date before
 accepting the citation.
 
-Output schema `trading-analysis-output-v0.2` no longer asks the model for score
-components or penalty points. Go derives both from the prediction, frozen
-screening evidence, and the versioned local risk policy.
+Output schema `trading-analysis-output-v0.3` no longer asks the model for score
+components, penalty points, risk labels, or the probability notice. Go derives
+the scores and penalties from frozen inputs and always applies the local
+“模型估计、非实际结果” notice.

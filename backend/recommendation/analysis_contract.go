@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -15,7 +13,7 @@ import (
 )
 
 const (
-	AnalysisSchemaVersion = "trading-analysis-output-v0.2"
+	AnalysisSchemaVersion = "trading-analysis-output-v0.3"
 	ProbabilityNotice     = "模型估计、非实际结果"
 )
 
@@ -29,16 +27,14 @@ type AnalysisEvidence struct {
 }
 
 type StructuredAnalysisOutput struct {
-	SchemaVersion     string             `json:"schemaVersion"`
-	ProbabilityNotice string             `json:"probabilityNotice"`
-	RiseProbability   float64            `json:"riseProbability"`
-	ReturnRangeLow    float64            `json:"returnRangeLow"`
-	ReturnRangeHigh   float64            `json:"returnRangeHigh"`
-	RiskLabels        []string           `json:"riskLabels"`
-	Rationale         string             `json:"rationale"`
-	RiskNotes         string             `json:"riskNotes"`
-	Evidence          []AnalysisEvidence `json:"evidence"`
-	AgentConclusions  map[string]string  `json:"agentConclusions"`
+	SchemaVersion    string             `json:"schemaVersion"`
+	RiseProbability  float64            `json:"riseProbability"`
+	ReturnRangeLow   float64            `json:"returnRangeLow"`
+	ReturnRangeHigh  float64            `json:"returnRangeHigh"`
+	Rationale        string             `json:"rationale"`
+	RiskNotes        string             `json:"riskNotes"`
+	Evidence         []AnalysisEvidence `json:"evidence"`
+	AgentConclusions map[string]string  `json:"agentConclusions"`
 }
 
 type AnalysisSnapshotContext struct {
@@ -101,7 +97,7 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 	}
 	componentsJSON, _ := json.Marshal(components)
 	penaltiesJSON, _ := json.Marshal(penalties)
-	labels, _ := json.Marshal(output.RiskLabels)
+	labels, _ := json.Marshal(frozen.RiskLabels)
 	evidence, _ := json.Marshal(output.Evidence)
 	conclusions, _ := json.Marshal(output.AgentConclusions)
 	return &models.AIRecommendationSnapshot{SourceType: SourceAutomatic, ValidationBatchID: context.Job.ValidationBatchID,
@@ -125,13 +121,6 @@ func authoritativeScoreComponents(output StructuredAnalysisOutput, frozen frozen
 	returnOpportunity, err := CalculateReturnOpportunity(output.ReturnRangeLow, output.ReturnRangeHigh)
 	if err != nil {
 		return ScoreComponents{}, err
-	}
-	expectedLabels := append([]string(nil), frozen.RiskLabels...)
-	actualLabels := append([]string(nil), output.RiskLabels...)
-	sort.Strings(expectedLabels)
-	sort.Strings(actualLabels)
-	if !slices.Equal(expectedLabels, actualLabels) {
-		return ScoreComponents{}, errors.New("model risk labels conflict with frozen inputs")
 	}
 	return ScoreComponents{RiseProbability: output.RiseProbability, ReturnOpportunity: returnOpportunity,
 		VolatilitySafety: screening.RiskSafety, Liquidity: screening.Liquidity,
@@ -157,8 +146,8 @@ func validateAnalysisEvidenceProvenance(evidence []AnalysisEvidence, frozen froz
 }
 
 func validateStructuredAnalysis(output StructuredAnalysisOutput, dataAsOf time.Time) error {
-	if output.SchemaVersion != AnalysisSchemaVersion || output.ProbabilityNotice != ProbabilityNotice {
-		return errors.New("analysis schema or probability notice is invalid")
+	if output.SchemaVersion != AnalysisSchemaVersion {
+		return errors.New("analysis schema is invalid")
 	}
 	if !finite(output.RiseProbability) || output.RiseProbability < 0 || output.RiseProbability > 100 ||
 		!finite(output.ReturnRangeLow) || !finite(output.ReturnRangeHigh) || output.ReturnRangeLow > output.ReturnRangeHigh {
@@ -178,13 +167,6 @@ func validateStructuredAnalysis(output StructuredAnalysisOutput, dataAsOf time.T
 			return errors.New("analysis evidence is incomplete, duplicated, or newer than data cutoff")
 		}
 		seenEvidence[item.ID] = true
-	}
-	seenLabels := make(map[string]bool, len(output.RiskLabels))
-	for _, label := range output.RiskLabels {
-		if strings.TrimSpace(label) == "" || seenLabels[label] {
-			return errors.New("risk labels must be non-empty and unique")
-		}
-		seenLabels[label] = true
 	}
 	return nil
 }
