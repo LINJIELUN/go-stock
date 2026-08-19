@@ -53,7 +53,7 @@ func TestCompileStructuredAnalysisUsesAuthoritativeContextAndCalculatesIndex(t *
 	}
 	if snapshot.StockCode != context.Job.StockCode || snapshot.ValidationBatchID != context.Job.ValidationBatchID ||
 		snapshot.BaselinePrice != 10 || snapshot.AIRecommendationIndex != 58 || snapshot.ProbabilityNotice != ProbabilityNotice ||
-		snapshot.ModelVersion != "provider/model-v1" || snapshot.PromptVersion != "prompt-v1" {
+		snapshot.ModelVersion != "provider/model-v1" || snapshot.PromptVersion != "prompt-v1" || snapshot.Status != RecommendationStatusShadow {
 		t.Fatalf("unexpected compiled snapshot: %+v", snapshot)
 	}
 	if !strings.Contains(snapshot.EvidenceJSON, "validated-market-data") || !strings.Contains(snapshot.AgentConclusionsJSON, "technical") {

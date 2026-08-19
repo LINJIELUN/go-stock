@@ -108,7 +108,7 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 		AIRecommendationIndex: score.Index, ScoreComponentsJSON: string(componentsJSON), PenaltiesJSON: string(penaltiesJSON),
 		Rationale: strings.TrimSpace(output.Rationale), RiskNotes: strings.TrimSpace(output.RiskNotes), ModelVersion: context.ModelVersion,
 		PromptVersion: context.PromptVersion, ProbabilityNotice: ProbabilityNotice, EvidenceJSON: string(evidence), AgentConclusionsJSON: string(conclusions),
-		StrategyVersion: score.StrategyVersion, ReviewDueDate: context.ReviewDueDate, Status: "active"}, nil
+		StrategyVersion: score.StrategyVersion, ReviewDueDate: context.ReviewDueDate, Status: RecommendationStatusShadow}, nil
 }
 
 func authoritativeScoreComponents(output StructuredAnalysisOutput, frozen frozenAnalysisInput) (ScoreComponents, error) {

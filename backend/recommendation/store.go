@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	SourceAutomatic = "automatic"
-	SourceManual    = "manual"
-	StatusPending   = "pending_review"
+	SourceAutomatic            = "automatic"
+	SourceManual               = "manual"
+	StatusPending              = "pending_review"
+	RecommendationStatusShadow = "shadow"
+	RecommendationStatusActive = "active"
 )
 
 // Store is the only persistence entry point for recommendation snapshots. Keeping
@@ -164,8 +166,11 @@ func validateSnapshot(snapshot *models.AIRecommendationSnapshot) error {
 	if snapshot.ReviewDueDate.Before(snapshot.CompletedAt) {
 		return errors.New("review due date cannot precede analysis completion")
 	}
-	if snapshot.ModelVersion == "" || snapshot.PromptVersion == "" || snapshot.StrategyVersion == "" || snapshot.Status == "" || snapshot.ProbabilityNotice == "" {
+	if snapshot.ModelVersion == "" || snapshot.PromptVersion == "" || snapshot.StrategyVersion == "" || snapshot.ProbabilityNotice == "" {
 		return errors.New("model, prompt, strategy, status, and probability notice are required")
+	}
+	if snapshot.Status != RecommendationStatusShadow && snapshot.Status != RecommendationStatusActive {
+		return errors.New("recommendation status must be shadow or active")
 	}
 	if err := validJSONObject(snapshot.ScoreComponentsJSON); err != nil {
 		return fmt.Errorf("score components: %w", err)

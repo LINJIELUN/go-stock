@@ -50,7 +50,7 @@ func validSnapshot(now time.Time) *models.AIRecommendationSnapshot {
 		ReturnRangeHigh: 8, AIRecommendationIndex: 70, ScoreComponentsJSON: `{ "dataQuality": 80 }`,
 		PenaltiesJSON: "[]", ModelVersion: "test-model", StrategyVersion: StrategyVersion,
 		PromptVersion: "test-prompt", ProbabilityNotice: ProbabilityNotice, EvidenceJSON: `[]`, AgentConclusionsJSON: `{}`,
-		ReviewDueDate: now.AddDate(0, 0, 10), Status: "active",
+		ReviewDueDate: now.AddDate(0, 0, 10), Status: RecommendationStatusActive,
 	}
 }
 
@@ -142,5 +142,14 @@ func TestSetFavoriteRejectsUnknownRecommendation(t *testing.T) {
 	store, _ := testStore(t)
 	if err := store.SetFavorite(99, true, time.Now()); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected record not found, got %v", err)
+	}
+}
+
+func TestCreateSnapshotRejectsUnknownPublicationStatus(t *testing.T) {
+	store, _ := testStore(t)
+	snapshot := validSnapshot(time.Now().UTC())
+	snapshot.Status = "published"
+	if err := store.CreateSnapshot(snapshot); err == nil || !strings.Contains(err.Error(), "shadow or active") {
+		t.Fatalf("expected unknown publication status rejection: %v", err)
 	}
 }
