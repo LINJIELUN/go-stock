@@ -52,6 +52,16 @@ func TestCalculateReturnOpportunityRewardsMidpointAndPenalizesWidth(t *testing.T
 	}
 }
 
+func TestLocalRiskPenaltiesAreDeterministicAndRejectConflicts(t *testing.T) {
+	penalties, err := LocalRiskPenalties([]string{"NEW_STOCK", "ST", "DISPLAY_ONLY"})
+	if err != nil || len(penalties) != 2 || penalties[0] != (Penalty{Code: "NEW_STOCK", Points: 5}) || penalties[1] != (Penalty{Code: "ST", Points: 8}) {
+		t.Fatalf("unexpected local penalties: %+v %v", penalties, err)
+	}
+	if _, err := LocalRiskPenalties([]string{"ST", "*ST"}); err == nil {
+		t.Fatal("expected mutually exclusive ST labels rejection")
+	}
+}
+
 func TestSelectDailyRecommendationsEnforcesRiskCaps(t *testing.T) {
 	candidates := []Candidate{
 		{ID: 1, Index: 99, IsST: true, IsNewStock: true},

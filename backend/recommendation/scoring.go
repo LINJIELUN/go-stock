@@ -7,8 +7,14 @@ import (
 	"sort"
 )
 
-const StrategyVersion = "ai-recommendation-index-v0.1"
+const StrategyVersion = "ai-recommendation-index-v0.2"
 const SingleCallConsensusScore = 50.0
+
+var shadowRiskPenaltyPoints = map[string]float64{
+	"ST":        8,
+	"*ST":       12,
+	"NEW_STOCK": 5,
+}
 
 type ScoreComponents struct {
 	RiseProbability   float64 `json:"riseProbability"`
@@ -89,6 +95,35 @@ func CalculateReturnOpportunity(low, high float64) (float64, error) {
 	}
 	midpoint, width := (low+high)/2, high-low
 	return round(clamp(50+5*midpoint-2*width, 0, 100), 4), nil
+}
+
+// LocalRiskPenalties prevents the model from choosing its own index deduction.
+// These shadow-run points are versioned with StrategyVersion and must be
+// recalibrated from reviewed samples before production claims are made.
+func LocalRiskPenalties(labels []string) ([]Penalty, error) {
+	seen := make(map[string]struct{}, len(labels))
+	for _, label := range labels {
+		if label == "" {
+			return nil, errors.New("risk label is required")
+		}
+		if _, exists := seen[label]; exists {
+			return nil, fmt.Errorf("duplicate risk label %q", label)
+		}
+		seen[label] = struct{}{}
+	}
+	if _, st := seen["ST"]; st {
+		if _, starST := seen["*ST"]; starST {
+			return nil, errors.New("ST and *ST labels are mutually exclusive")
+		}
+	}
+	penalties := make([]Penalty, 0, len(labels))
+	for label, points := range shadowRiskPenaltyPoints {
+		if _, exists := seen[label]; exists {
+			penalties = append(penalties, Penalty{Code: label, Points: points})
+		}
+	}
+	sort.Slice(penalties, func(i, j int) bool { return penalties[i].Code < penalties[j].Code })
+	return penalties, nil
 }
 
 type Candidate struct {

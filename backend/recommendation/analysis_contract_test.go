@@ -170,9 +170,10 @@ func TestCompileStructuredAnalysisOverridesModelControlledScores(t *testing.T) {
 		t.Fatalf("expected invented risk label rejection: %v", err)
 	}
 	json.Unmarshal(validAnalysisContract(t, context.DataAsOf), &output)
-	output.Penalties = append(output.Penalties, Penalty{Code: "INVENTED", Points: 20})
+	output.Penalties = []Penalty{{Code: "NEW_STOCK", Points: 99}}
 	raw, _ = json.Marshal(output)
-	if _, err := CompileStructuredAnalysis(raw, context); err == nil || !strings.Contains(err.Error(), "not backed") {
-		t.Fatalf("expected unbacked penalty rejection: %v", err)
+	snapshot, err = CompileStructuredAnalysis(raw, context)
+	if err != nil || !strings.Contains(snapshot.PenaltiesJSON, `"points":5`) || strings.Contains(snapshot.PenaltiesJSON, `99`) {
+		t.Fatalf("model-controlled penalty was not replaced: %+v %v", snapshot, err)
 	}
 }

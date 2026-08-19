@@ -93,12 +93,16 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 	if err != nil {
 		return nil, err
 	}
-	score, err := CalculateIndex(components, output.Penalties)
+	penalties, err := LocalRiskPenalties(frozen.RiskLabels)
+	if err != nil {
+		return nil, err
+	}
+	score, err := CalculateIndex(components, penalties)
 	if err != nil {
 		return nil, err
 	}
 	componentsJSON, _ := json.Marshal(components)
-	penalties, _ := json.Marshal(output.Penalties)
+	penaltiesJSON, _ := json.Marshal(penalties)
 	labels, _ := json.Marshal(output.RiskLabels)
 	evidence, _ := json.Marshal(output.Evidence)
 	conclusions, _ := json.Marshal(output.AgentConclusions)
@@ -107,7 +111,7 @@ func CompileStructuredAnalysis(raw []byte, context AnalysisSnapshotContext) (*mo
 		StockCode: context.Job.StockCode, StockName: context.StockName, RiskLabelsJSON: string(labels), CompletedAt: context.CompletedAt,
 		DataAsOf: context.DataAsOf, BaselinePrice: context.BaselinePrice, BaselineMarketTime: context.BaselineMarketTime,
 		RiseProbability: output.RiseProbability, ReturnRangeLow: output.ReturnRangeLow, ReturnRangeHigh: output.ReturnRangeHigh,
-		AIRecommendationIndex: score.Index, ScoreComponentsJSON: string(componentsJSON), PenaltiesJSON: string(penalties),
+		AIRecommendationIndex: score.Index, ScoreComponentsJSON: string(componentsJSON), PenaltiesJSON: string(penaltiesJSON),
 		Rationale: strings.TrimSpace(output.Rationale), RiskNotes: strings.TrimSpace(output.RiskNotes), ModelVersion: context.ModelVersion,
 		PromptVersion: context.PromptVersion, ProbabilityNotice: ProbabilityNotice, EvidenceJSON: string(evidence), AgentConclusionsJSON: string(conclusions),
 		StrategyVersion: score.StrategyVersion, ReviewDueDate: context.ReviewDueDate, Status: "active"}, nil
@@ -130,15 +134,6 @@ func authoritativeScoreComponents(output StructuredAnalysisOutput, frozen frozen
 	sort.Strings(actualLabels)
 	if !slices.Equal(expectedLabels, actualLabels) {
 		return ScoreComponents{}, errors.New("model risk labels conflict with frozen inputs")
-	}
-	allowedPenalties := make(map[string]struct{}, len(expectedLabels))
-	for _, label := range expectedLabels {
-		allowedPenalties[label] = struct{}{}
-	}
-	for _, penalty := range output.Penalties {
-		if _, exists := allowedPenalties[penalty.Code]; !exists {
-			return ScoreComponents{}, fmt.Errorf("model penalty %s is not backed by a frozen risk label", penalty.Code)
-		}
 	}
 	return ScoreComponents{RiseProbability: output.RiseProbability, ReturnOpportunity: returnOpportunity,
 		VolatilitySafety: screening.RiskSafety, Liquidity: screening.Liquidity,
