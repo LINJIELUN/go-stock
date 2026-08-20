@@ -23,7 +23,7 @@ func TestShadowRuntimeCompletesOfflineScheduleAnalyzeReviewCycle(t *testing.T) {
 	location, _ := time.LoadLocation("Asia/Shanghai")
 	now := time.Date(2026, 8, 19, 15, 30, 0, 0, location)
 	candidates := &fixedCandidates{values: []AnalysisCandidate{testCandidate()}}
-	scheduler, err := NewPostCloseScheduler(jobs, fixedTradingDay{trading: true}, candidates, location, StrategyVersion, 3)
+	scheduler, err := NewPostCloseScheduler(jobs, fixedTradingDay{trading: true}, candidates, testPostClosePolicy(location))
 	if err != nil {
 		t.Fatal(err)
 	}

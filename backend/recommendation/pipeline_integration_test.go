@@ -76,7 +76,7 @@ func TestOfflinePipelineRunsValidationThroughReviewWithoutRefetch(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	scheduler, err := NewPostCloseScheduler(jobs, fixedTradingDay{trading: true}, candidates, location, StrategyVersion, 3)
+	scheduler, err := NewPostCloseScheduler(jobs, fixedTradingDay{trading: true}, candidates, testPostClosePolicy(location))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,7 @@ func TestPostCloseSchedulerHonorsCutoffTradingDayAndIdempotency(t *testing.T) {
 	jobs, _, _ := analysisJobStore(t)
 	location, _ := time.LoadLocation("Asia/Shanghai")
 	source := &fixedCandidates{values: []AnalysisCandidate{testCandidate()}}
-	scheduler, err := NewPostCloseScheduler(jobs, fixedTradingDay{trading: true}, source, location, StrategyVersion, 3)
+	scheduler, err := NewPostCloseScheduler(jobs, fixedTradingDay{trading: true}, source, testPostClosePolicy(location))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,10 +63,24 @@ func TestPostCloseSchedulerSkipsNonTradingDay(t *testing.T) {
 	jobs, _, _ := analysisJobStore(t)
 	location, _ := time.LoadLocation("Asia/Shanghai")
 	source := &fixedCandidates{values: []AnalysisCandidate{testCandidate()}}
-	scheduler, _ := NewPostCloseScheduler(jobs, fixedTradingDay{trading: false}, source, location, StrategyVersion, 3)
+	scheduler, _ := NewPostCloseScheduler(jobs, fixedTradingDay{trading: false}, source, testPostClosePolicy(location))
 	now := time.Date(2026, 8, 16, 16, 0, 0, 0, location)
 	if run, created, err := scheduler.Tick(context.Background(), now); err != nil || run != nil || created || source.calls != 0 {
 		t.Fatalf("non-trading day was scheduled: %+v %v %v", run, created, err)
+	}
+}
+
+func testPostClosePolicy(location *time.Location) PostCloseSchedulePolicy {
+	return PostCloseSchedulePolicy{Location: location, CutoffHour: 15, CutoffMinute: 30, Strategy: StrategyVersion, MaxAttempts: 3}
+}
+
+func TestPostCloseSchedulerRejectsInvalidCutoff(t *testing.T) {
+	jobs, _, _ := analysisJobStore(t)
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	policy := testPostClosePolicy(location)
+	policy.CutoffHour = 24
+	if _, err := NewPostCloseScheduler(jobs, fixedTradingDay{trading: true}, &fixedCandidates{values: []AnalysisCandidate{testCandidate()}}, policy); err == nil {
+		t.Fatal("expected invalid post-close cutoff rejection")
 	}
 }
 

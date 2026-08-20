@@ -29,12 +29,21 @@ type PostCloseScheduler struct {
 	maxAttempts int
 }
 
-func NewPostCloseScheduler(jobs *JobStore, calendar TradingDayDecider, candidates AnalysisCandidateSource, location *time.Location, strategy string, maxAttempts int) (*PostCloseScheduler, error) {
-	if jobs == nil || calendar == nil || candidates == nil || location == nil || strategy == "" || maxAttempts <= 0 {
-		return nil, errors.New("post-close scheduler requires jobs, calendar, candidates, location, strategy, and attempts")
+type PostCloseSchedulePolicy struct {
+	Location     *time.Location
+	CutoffHour   int
+	CutoffMinute int
+	Strategy     string
+	MaxAttempts  int
+}
+
+func NewPostCloseScheduler(jobs *JobStore, calendar TradingDayDecider, candidates AnalysisCandidateSource, policy PostCloseSchedulePolicy) (*PostCloseScheduler, error) {
+	if jobs == nil || calendar == nil || candidates == nil || policy.Location == nil || policy.Strategy == "" || policy.MaxAttempts <= 0 ||
+		policy.CutoffHour < 0 || policy.CutoffHour > 23 || policy.CutoffMinute < 0 || policy.CutoffMinute > 59 {
+		return nil, errors.New("post-close scheduler requires jobs, calendar, candidates, location, valid cutoff, strategy, and attempts")
 	}
-	return &PostCloseScheduler{jobs: jobs, calendar: calendar, candidates: candidates, location: location,
-		startHour: 15, startMinute: 30, strategy: strategy, maxAttempts: maxAttempts}, nil
+	return &PostCloseScheduler{jobs: jobs, calendar: calendar, candidates: candidates, location: policy.Location,
+		startHour: policy.CutoffHour, startMinute: policy.CutoffMinute, strategy: policy.Strategy, maxAttempts: policy.MaxAttempts}, nil
 }
 
 // Tick is safe to call repeatedly. Before 15:30 or on a non-trading day it is a
