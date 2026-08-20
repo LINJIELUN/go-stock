@@ -46,8 +46,9 @@ func NewPostCloseScheduler(jobs *JobStore, calendar TradingDayDecider, candidate
 		startHour: policy.CutoffHour, startMinute: policy.CutoffMinute, strategy: policy.Strategy, maxAttempts: policy.MaxAttempts}, nil
 }
 
-// Tick is safe to call repeatedly. Before 15:30 or on a non-trading day it is a
-// no-op; after the cutoff the JobStore date/strategy key prevents duplicate runs.
+// Tick is safe to call repeatedly. Before the configured cutoff or on a
+// non-trading day it is a no-op; after the cutoff the JobStore date/strategy key
+// prevents duplicate runs.
 func (s *PostCloseScheduler) Tick(ctx context.Context, now time.Time) (*models.AIAnalysisRun, bool, error) {
 	if now.IsZero() {
 		return nil, false, errors.New("scheduler time is required")
@@ -57,21 +58,21 @@ func (s *PostCloseScheduler) Tick(ctx context.Context, now time.Time) (*models.A
 	if local.Before(cutoff) {
 		return nil, false, nil
 	}
-	trading, err := s.calendar.IsTradingDay(ctx, local)
-	if err != nil {
-		return nil, false, fmt.Errorf("resolve trading day: %w", err)
-	}
-	if !trading {
-		return nil, false, nil
-	}
 	// Once a run exists, its jobs are the frozen candidate/evidence set. Avoid
-	// calling external providers again on every runtime tick.
+	// making durable work depend on calendar or candidate providers recovering.
 	existing, found, err := s.jobs.FindRun(local, s.strategy)
 	if err != nil {
 		return nil, false, fmt.Errorf("load existing analysis run: %w", err)
 	}
 	if found {
 		return existing, false, nil
+	}
+	trading, err := s.calendar.IsTradingDay(ctx, local)
+	if err != nil {
+		return nil, false, fmt.Errorf("resolve trading day: %w", err)
+	}
+	if !trading {
+		return nil, false, nil
 	}
 	candidates, err := s.candidates.Candidates(ctx, local)
 	if err != nil {

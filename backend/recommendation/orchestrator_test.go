@@ -15,6 +15,13 @@ func (f fixedTradingDay) IsTradingDay(context.Context, time.Time) (bool, error) 
 	return f.trading, nil
 }
 
+type failingTradingDay struct{ calls int }
+
+func (f *failingTradingDay) IsTradingDay(context.Context, time.Time) (bool, error) {
+	f.calls++
+	return false, errors.New("calendar unavailable")
+}
+
 type fixedCandidates struct {
 	values []AnalysisCandidate
 	calls  int
@@ -67,6 +74,30 @@ func TestPostCloseSchedulerSkipsNonTradingDay(t *testing.T) {
 	now := time.Date(2026, 8, 16, 16, 0, 0, 0, location)
 	if run, created, err := scheduler.Tick(context.Background(), now); err != nil || run != nil || created || source.calls != 0 {
 		t.Fatalf("non-trading day was scheduled: %+v %v %v", run, created, err)
+	}
+}
+
+func TestPostCloseSchedulerResumesFrozenRunWithoutExternalProviders(t *testing.T) {
+	jobs, _, _ := analysisJobStore(t)
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	now := time.Date(2026, 8, 17, 16, 0, 0, 0, location)
+	existing, created, err := jobs.CreateRun(now, StrategyVersion, []AnalysisCandidate{testCandidate()}, 3, now)
+	if err != nil || !created {
+		t.Fatalf("create frozen run: run=%+v created=%v err=%v", existing, created, err)
+	}
+
+	calendar := &failingTradingDay{}
+	source := &fixedCandidates{values: []AnalysisCandidate{testCandidate()}}
+	scheduler, err := NewPostCloseScheduler(jobs, calendar, source, testPostClosePolicy(location))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, created, err := scheduler.Tick(context.Background(), now.Add(time.Hour))
+	if err != nil || created || resumed == nil || resumed.ID != existing.ID {
+		t.Fatalf("resume frozen run: run=%+v created=%v err=%v", resumed, created, err)
+	}
+	if calendar.calls != 0 || source.calls != 0 {
+		t.Fatalf("existing run consulted external providers: calendar=%d candidates=%d", calendar.calls, source.calls)
 	}
 }
 
