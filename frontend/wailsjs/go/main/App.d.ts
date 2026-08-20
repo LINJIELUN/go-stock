@@ -113,6 +113,8 @@ export function GetAIResponseResultList(arg1:models.AIResponseResultQuery):Promi
 
 export function GetAIShadowReport(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<recommendation.ShadowReport>;
 
+export function GetAIShadowRuntimeHealth():Promise<recommendation.RuntimeControllerHealth>;
+
 export function GetAiAssistantSession(arg1:string):Promise<models.AiAssistantSessionResp>;
 
 export function GetAiConfigs():Promise<Array<data.AIConfig>>;

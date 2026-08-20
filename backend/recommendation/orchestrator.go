@@ -86,10 +86,10 @@ type JobAnalyzer interface {
 }
 
 type ProcessResult struct {
-	JobID            uint
-	Status           string
-	RecommendationID uint
-	AnalysisError    string
+	JobID            uint   `json:"jobId"`
+	Status           string `json:"status"`
+	RecommendationID uint   `json:"recommendationId"`
+	AnalysisError    string `json:"analysisError"`
 }
 
 type AnalysisProcessor struct {

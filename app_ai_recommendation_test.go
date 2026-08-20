@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -47,5 +48,22 @@ func TestBuildAIShadowReportRejectsUnavailableDatabase(t *testing.T) {
 	start := time.Now().UTC()
 	if _, err := buildAIShadowReport(nil, start.Format(time.RFC3339), start.Add(time.Hour).Format(time.RFC3339), recommendation.StrategyVersion, "test-model", "test-prompt"); err == nil {
 		t.Fatal("expected unavailable database rejection")
+	}
+}
+
+func TestAIShadowRuntimeIsExplicitlyUnconfigured(t *testing.T) {
+	app := NewApp()
+	health := app.GetAIShadowRuntimeHealth()
+	if health.Configured || health.Running {
+		t.Fatalf("unconfigured runtime reported active health: %+v", health)
+	}
+	if err := app.startAIShadowRuntime(context.Background()); err != nil {
+		t.Fatalf("unconfigured startup should be a no-op: %v", err)
+	}
+	if err := app.stopAIShadowRuntime(context.Background()); err != nil {
+		t.Fatalf("unconfigured shutdown should be a no-op: %v", err)
+	}
+	if err := app.setAIShadowRuntime(nil); err == nil {
+		t.Fatal("expected nil runtime configuration rejection")
 	}
 }

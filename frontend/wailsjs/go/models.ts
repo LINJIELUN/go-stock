@@ -2040,6 +2040,81 @@ export namespace main {
 }
 
 export namespace recommendation {
+	export class ProcessResult {
+	    jobId: number;
+	    status: string;
+	    recommendationId: number;
+	    analysisError: string;
+	    static createFrom(source: any = {}) { return new ProcessResult(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.jobId = source["jobId"];
+	        this.status = source["status"];
+	        this.recommendationId = source["recommendationId"];
+	        this.analysisError = source["analysisError"];
+	    }
+	}
+
+	export class RuntimeTickResult {
+	    runCreated: boolean;
+	    runId: number;
+	    recoveredLeases: number;
+	    processedJobs: ProcessResult[];
+	    completedReviews: number;
+	    static createFrom(source: any = {}) { return new RuntimeTickResult(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.runCreated = source["runCreated"];
+	        this.runId = source["runId"];
+	        this.recoveredLeases = source["recoveredLeases"];
+	        this.processedJobs = this.convertValues(source["processedJobs"], ProcessResult);
+	        this.completedReviews = source["completedReviews"];
+	    }
+	    convertValues(a: any, classs: any, asMap: boolean = false): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        if (typeof a === "object") {
+	            if (asMap) for (const key of Object.keys(a)) a[key] = new classs(a[key]);
+	            else return new classs(a);
+	        }
+	        return a;
+	    }
+	}
+
+	export class RuntimeHealth {
+	    running: boolean;
+	    lastTickStartedAt: any;
+	    lastTickCompletedAt: any;
+	    consecutiveFailures: number;
+	    lastError: string;
+	    lastResult: RuntimeTickResult;
+	    static createFrom(source: any = {}) { return new RuntimeHealth(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.lastTickStartedAt = source["lastTickStartedAt"];
+	        this.lastTickCompletedAt = source["lastTickCompletedAt"];
+	        this.consecutiveFailures = source["consecutiveFailures"];
+	        this.lastError = source["lastError"];
+	        this.lastResult = this.convertValues(source["lastResult"], RuntimeTickResult);
+	    }
+	    convertValues(a: any, classs: any): any { return a ? new classs(a) : a; }
+	}
+
+	export class RuntimeControllerHealth {
+	    configured: boolean;
+	    running: boolean;
+	    lastExit: string;
+	    runtime: RuntimeHealth;
+	    static createFrom(source: any = {}) { return new RuntimeControllerHealth(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.running = source["running"];
+	        this.lastExit = source["lastExit"];
+	        this.runtime = source["runtime"] ? new RuntimeHealth(source["runtime"]) : source["runtime"];
+	    }
+	}
 
 	export class ShadowCohort {
 	    strategyVersion: string;

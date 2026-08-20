@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -8,6 +9,51 @@ import (
 	"go-stock/backend/recommendation"
 	"gorm.io/gorm"
 )
+
+func (a *App) setAIShadowRuntime(controller *recommendation.RuntimeController) error {
+	if controller == nil {
+		return fmt.Errorf("AI shadow runtime controller is required")
+	}
+	a.shadowRuntimeMu.Lock()
+	defer a.shadowRuntimeMu.Unlock()
+	if a.shadowRuntime != nil && a.shadowRuntime != controller {
+		return fmt.Errorf("AI shadow runtime controller is already configured")
+	}
+	a.shadowRuntime = controller
+	return nil
+}
+
+func (a *App) startAIShadowRuntime(ctx context.Context) error {
+	a.shadowRuntimeMu.RLock()
+	controller := a.shadowRuntime
+	a.shadowRuntimeMu.RUnlock()
+	if controller == nil {
+		return nil
+	}
+	return controller.Start(ctx)
+}
+
+func (a *App) stopAIShadowRuntime(ctx context.Context) error {
+	a.shadowRuntimeMu.RLock()
+	controller := a.shadowRuntime
+	a.shadowRuntimeMu.RUnlock()
+	if controller == nil {
+		return nil
+	}
+	return controller.Stop(ctx)
+}
+
+// GetAIShadowRuntimeHealth is read-only and reports Configured=false when no
+// production providers and model runtime have been explicitly assembled.
+func (a *App) GetAIShadowRuntimeHealth() recommendation.RuntimeControllerHealth {
+	a.shadowRuntimeMu.RLock()
+	controller := a.shadowRuntime
+	a.shadowRuntimeMu.RUnlock()
+	if controller == nil {
+		return recommendation.RuntimeControllerHealth{}
+	}
+	return controller.Health()
+}
 
 // GetAIShadowReport exposes read-only shadow evidence to the desktop client.
 // Both boundaries require an explicit RFC3339 offset so the selected cohort is

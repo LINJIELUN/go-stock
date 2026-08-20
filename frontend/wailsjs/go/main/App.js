@@ -214,6 +214,10 @@ export function GetAIShadowReport(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['GetAIShadowReport'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function GetAIShadowRuntimeHealth() {
+  return window['go']['main']['App']['GetAIShadowRuntimeHealth']();
+}
+
 export function GetAiAssistantSession(arg1) {
   return window['go']['main']['App']['GetAiAssistantSession'](arg1);
 }

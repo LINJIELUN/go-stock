@@ -18,6 +18,7 @@ import (
 	"go-stock/backend/logger"
 	"go-stock/backend/machineid"
 	"go-stock/backend/models"
+	"go-stock/backend/recommendation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,6 +58,8 @@ type App struct {
 	priceAtAlertReset  map[string]float64
 	feishuBotMu        sync.Mutex
 	feishuBot          *agent.FeishuBot
+	shadowRuntimeMu    sync.RWMutex
+	shadowRuntime      *recommendation.RuntimeController
 }
 
 // NewApp creates a new App application struct
@@ -1854,6 +1857,11 @@ func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 // shutdown is called at application termination
 func (a *App) shutdown(ctx context.Context) {
 	defer PanicHandler()
+	stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.stopAIShadowRuntime(stopCtx); err != nil {
+		logger.SugaredLogger.Errorf("stop AI shadow runtime: %v", err)
+	}
 	// 停止飞书应用机器人长连接
 	a.stopFeishuBotInternal()
 	// 记录当前窗口大小，供下次启动时还原
