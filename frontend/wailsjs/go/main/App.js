@@ -218,6 +218,10 @@ export function GetAIShadowRuntimeHealth() {
   return window['go']['main']['App']['GetAIShadowRuntimeHealth']();
 }
 
+export function GetAIShadowRuntimeReadiness() {
+  return window['go']['main']['App']['GetAIShadowRuntimeReadiness']();
+}
+
 export function GetAiAssistantSession(arg1) {
   return window['go']['main']['App']['GetAiAssistantSession'](arg1);
 }

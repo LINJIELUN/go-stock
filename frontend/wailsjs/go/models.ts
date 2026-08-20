@@ -2040,6 +2040,31 @@ export namespace main {
 }
 
 export namespace recommendation {
+	export class RuntimeConfigIssue {
+	    code: string;
+	    message: string;
+	    static createFrom(source: any = {}) { return new RuntimeConfigIssue(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.message = source["message"];
+	    }
+	}
+
+	export class RuntimeReadiness {
+	    version: string;
+	    enabled: boolean;
+	    ready: boolean;
+	    issues: RuntimeConfigIssue[];
+	    static createFrom(source: any = {}) { return new RuntimeReadiness(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.enabled = source["enabled"];
+	        this.ready = source["ready"];
+	        this.issues = (source["issues"] || []).map((item: any) => new RuntimeConfigIssue(item));
+	    }
+	}
 	export class ProcessResult {
 	    jobId: number;
 	    status: string;

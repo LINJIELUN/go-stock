@@ -67,3 +67,14 @@ func TestAIShadowRuntimeIsExplicitlyUnconfigured(t *testing.T) {
 		t.Fatal("expected nil runtime configuration rejection")
 	}
 }
+
+func TestAIShadowRuntimeReadinessIsDisabledWithoutOptIn(t *testing.T) {
+	t.Setenv("AI_SHADOW_ENABLED", "false")
+	readiness, err := NewApp().GetAIShadowRuntimeReadiness()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if readiness.Enabled || readiness.Ready || len(readiness.Issues) != 1 || readiness.Issues[0].Code != "disabled" {
+		t.Fatalf("unexpected opt-in readiness: %+v", readiness)
+	}
+}

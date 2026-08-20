@@ -3,12 +3,27 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"go-stock/backend/db"
 	"go-stock/backend/recommendation"
 	"gorm.io/gorm"
 )
+
+type processRuntimeEnvironment struct{}
+
+func (processRuntimeEnvironment) LookupEnv(key string) (string, bool) { return os.LookupEnv(key) }
+
+// GetAIShadowRuntimeReadiness reports configuration blockers without exposing
+// provider tokens or model API keys.
+func (a *App) GetAIShadowRuntimeReadiness() (recommendation.RuntimeReadiness, error) {
+	config, err := recommendation.LoadRuntimeConfig(processRuntimeEnvironment{})
+	if err != nil {
+		return recommendation.RuntimeReadiness{}, err
+	}
+	return config.Readiness(), nil
+}
 
 func (a *App) setAIShadowRuntime(controller *recommendation.RuntimeController) error {
 	if controller == nil {

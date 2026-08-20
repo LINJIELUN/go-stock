@@ -115,6 +115,8 @@ export function GetAIShadowReport(arg1:string,arg2:string,arg3:string,arg4:strin
 
 export function GetAIShadowRuntimeHealth():Promise<recommendation.RuntimeControllerHealth>;
 
+export function GetAIShadowRuntimeReadiness():Promise<recommendation.RuntimeReadiness>;
+
 export function GetAiAssistantSession(arg1:string):Promise<models.AiAssistantSessionResp>;
 
 export function GetAiConfigs():Promise<Array<data.AIConfig>>;
