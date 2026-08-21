@@ -12,6 +12,7 @@ import mcpServerManager from "../components/mcp-server-manager.vue"
 import klineAnalysis from "../components/kline-analysis.vue"
 import aiConfigManager from "../components/ai-config-manager.vue"
 import aiShadowReport from "../components/ai-shadow-report.vue"
+import aiRecommendations from "../components/ai-recommendations.vue"
 
 const routes = [
     { path: '/', component: stockView,name: 'stock'},
@@ -26,6 +27,7 @@ const routes = [
     { path: '/kline-analysis', component: klineAnalysis,name: 'klineAnalysis' },
     { path: '/ai-configs', component: aiConfigManager,name: 'aiConfigs' },
     { path: '/ai-shadow-report', component: aiShadowReport,name: 'aiShadowReport' },
+    { path: '/ai-recommendations', component: aiRecommendations,name: 'aiRecommendations' },
 
 ]
 

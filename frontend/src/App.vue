@@ -593,6 +593,18 @@ const menuOptions = ref([
     label: () => h(
         RouterLink,
         {
+          to: { name: 'aiRecommendations' },
+          onClick: () => { activeKey.value = 'aiRecommendations' },
+        },
+        {default: () => 'AI 股票研究'}
+    ),
+    key: 'aiRecommendations',
+    icon: renderIcon(TrendingUp),
+  },
+  {
+    label: () => h(
+        RouterLink,
+        {
           to: { name: 'aiShadowReport' },
           onClick: () => { activeKey.value = 'aiShadowReport' },
         },
