@@ -113,6 +113,8 @@ export function GetAIResponseResultList(arg1:models.AIResponseResultQuery):Promi
 
 export function GetAIShadowReport(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<recommendation.ShadowReport>;
 
+export function GetAIRecommendationCards(arg1:number,arg2:boolean):Promise<Array<recommendation.RecommendationCard>>;
+
 export function GetAIShadowRuntimeHealth():Promise<recommendation.RuntimeControllerHealth>;
 
 export function GetAIShadowRuntimeReadiness():Promise<recommendation.RuntimeReadiness>;
@@ -388,6 +390,8 @@ export function RemoveStockGroup(arg1:string,arg2:string,arg3:number):Promise<st
 export function RestartAsAdmin():Promise<void>;
 
 export function SaveAIResponseResult(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:number):Promise<void>;
+
+export function SetAIRecommendationFavorite(arg1:number,arg2:boolean):Promise<void>;
 
 export function SaveAiAssistantSession(arg1:string,arg2:Array<models.AiAssistantMessage>):Promise<void>;
 

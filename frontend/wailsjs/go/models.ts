@@ -2040,6 +2040,20 @@ export namespace main {
 }
 
 export namespace recommendation {
+	export class RecommendationCard {
+	    id: number; sourceType: string; status: string; stockCode: string; stockName: string;
+	    riskLabels: string[]; completedAt: any; dataAsOf: any; baselinePrice: number;
+	    riseProbability: number; returnRangeLow: number; returnRangeHigh: number;
+	    aiRecommendationIndex: number; rationale: string; riskNotes: string; probabilityNotice: string;
+	    reviewDueDate: any; isFavorite: boolean; actualReviewDate?: any; actualReturnPercent?: number;
+	    directionHit?: boolean; rangeHit?: boolean; outsideRangeDeviation?: number; reviewStatus: string;
+	    static createFrom(source: any = {}) { return new RecommendationCard(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        Object.assign(this, source);
+	        this.riskLabels = source["riskLabels"] || [];
+	    }
+	}
 	export class RuntimeConfigIssue {
 	    code: string;
 	    message: string;

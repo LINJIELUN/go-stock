@@ -214,6 +214,10 @@ export function GetAIShadowReport(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['GetAIShadowReport'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function GetAIRecommendationCards(arg1, arg2) {
+  return window['go']['main']['App']['GetAIRecommendationCards'](arg1, arg2);
+}
+
 export function GetAIShadowRuntimeHealth() {
   return window['go']['main']['App']['GetAIShadowRuntimeHealth']();
 }
@@ -764,6 +768,10 @@ export function RestartAsAdmin() {
 
 export function SaveAIResponseResult(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SaveAIResponseResult'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function SetAIRecommendationFavorite(arg1, arg2) {
+  return window['go']['main']['App']['SetAIRecommendationFavorite'](arg1, arg2);
 }
 
 export function SaveAiAssistantSession(arg1, arg2) {

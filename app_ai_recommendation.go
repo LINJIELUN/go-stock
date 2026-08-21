@@ -70,6 +70,26 @@ func (a *App) GetAIShadowRuntimeHealth() recommendation.RuntimeControllerHealth 
 	return controller.Health()
 }
 
+// GetAIRecommendationCards returns the small user-facing projection used by
+// the recommendation and review pages.
+func (a *App) GetAIRecommendationCards(limit int, favoritesOnly bool) ([]recommendation.RecommendationCard, error) {
+	store, err := recommendation.NewRecommendationViewStore(db.Dao)
+	if err != nil {
+		return nil, err
+	}
+	return store.List(limit, favoritesOnly)
+}
+
+// SetAIRecommendationFavorite changes only the favorite relationship. The
+// immutable prediction and its later review are deliberately retained.
+func (a *App) SetAIRecommendationFavorite(recommendationID uint, favorite bool) error {
+	store, err := recommendation.NewStore(db.Dao)
+	if err != nil {
+		return err
+	}
+	return store.SetFavorite(recommendationID, favorite, time.Now().UTC())
+}
+
 // GetAIShadowReport exposes read-only shadow evidence to the desktop client.
 // Both boundaries require an explicit RFC3339 offset so the selected cohort is
 // reproducible regardless of the machine's local timezone.

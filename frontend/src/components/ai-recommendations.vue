@@ -1,11 +1,15 @@
 <script setup>
-import {computed, ref} from 'vue'
+import {computed, onMounted, ref} from 'vue'
 import {NAlert, NButton, NCard, NDataTable, NEmpty, NInput, NInputGroup, NProgress, NTabPane, NTabs, NTag} from 'naive-ui'
+import {GetAIRecommendationCards, SetAIRecommendationFavorite} from '../../wailsjs/go/main/App'
 
 const activeTab = ref('today')
 const query = ref('')
 const analyzing = ref(false)
 const analyzedStock = ref(null)
+const loadingRecords = ref(false)
+const recordError = ref('')
+const dataMode = ref('演示数据')
 
 // 第一轮只验证完整产品交互；接入真实模型前必须移除这些演示记录。
 const recommendations = ref([
@@ -25,14 +29,55 @@ const favoriteRows = computed(() => reviews.value.filter(item => favoriteCodes.v
 const tagType = tag => tag.includes('ST') || tag === '新股' ? 'warning' : tag === 'ETF' ? 'info' : 'default'
 const indexColor = value => value >= 75 ? '#db5b83' : value >= 60 ? '#ed8aa8' : '#d9a4b3'
 
-function toggleFavorite(stock) {
+async function toggleFavorite(stock) {
   const next = new Set(favoriteCodes.value)
-  next.has(stock.code) ? next.delete(stock.code) : next.add(stock.code)
+  const favorite = !next.has(stock.code)
+  favorite ? next.add(stock.code) : next.delete(stock.code)
   favoriteCodes.value = next
   if (!reviews.value.some(item => item.code === stock.code)) {
     reviews.value.push({code: stock.code, name: stock.name, frozenAt: stock.completedAt, probability: stock.probability, predictedRange: stock.range, index: stock.index, dueDate: '待计算', actualReturn: '待复盘', direction: '—', interval: '—', deviation: '—', status: 'pending'})
   }
+  if (stock.id) {
+    try {
+      await SetAIRecommendationFavorite(stock.id, favorite)
+    } catch (error) {
+      favorite ? next.delete(stock.code) : next.add(stock.code)
+      favoriteCodes.value = new Set(next)
+      recordError.value = error?.message || String(error)
+    }
+  }
 }
+
+function percent(value) { return value === null || value === undefined ? null : Number(value) }
+function backendCard(card) {
+  return {id: card.id, code: card.stockCode, name: card.stockName, price: card.baselinePrice,
+    probability: Number(card.riseProbability), range: `${Number(card.returnRangeLow).toFixed(1)}% ～ ${Number(card.returnRangeHigh).toFixed(1)}%`,
+    index: card.aiRecommendationIndex, level: card.aiRecommendationIndex >= 75 ? '高度关注' : card.aiRecommendationIndex >= 60 ? '值得关注' : '谨慎观察',
+    tags: card.riskLabels || [], reason: card.rationale || '暂无研究摘要', risk: card.riskNotes || '暂无风险说明',
+    completedAt: new Date(card.completedAt).toLocaleString(), isFavorite: card.isFavorite,
+    dueDate: new Date(card.reviewDueDate).toLocaleDateString(), actualReturn: percent(card.actualReturnPercent),
+    directionHit: card.directionHit, rangeHit: card.rangeHit, deviation: percent(card.outsideRangeDeviation), reviewStatus: card.reviewStatus}
+}
+
+async function loadPersistedRecords() {
+  if (!window.go?.main?.App?.GetAIRecommendationCards) return
+  loadingRecords.value = true
+  recordError.value = ''
+  try {
+    const cards = (await GetAIRecommendationCards(100, false)).map(backendCard)
+    dataMode.value = '本地推荐记录'
+    recommendations.value = cards
+    favoriteCodes.value = new Set(cards.filter(card => card.isFavorite).map(card => card.code))
+    reviews.value = cards.filter(card => card.isFavorite).map(card => ({code: card.code, name: card.name, frozenAt: card.completedAt,
+      probability: card.probability, predictedRange: card.range, index: card.index, dueDate: card.dueDate,
+      actualReturn: card.actualReturn === null ? '待复盘' : `${card.actualReturn.toFixed(2)}%`, direction: card.directionHit === undefined || card.directionHit === null ? '—' : card.directionHit ? '命中' : '未命中',
+      interval: card.rangeHit === undefined || card.rangeHit === null ? '—' : card.rangeHit ? '命中' : '未命中', deviation: card.deviation === null ? '—' : `${card.deviation.toFixed(2)}%`, status: card.reviewStatus}))
+  } catch (error) {
+    recordError.value = error?.message || String(error)
+  } finally { loadingRecords.value = false }
+}
+
+onMounted(loadPersistedRecords)
 
 async function analyze() {
   if (!query.value.trim()) return
@@ -60,17 +105,20 @@ const reviewColumns = [
   <main class="recommend-page">
     <header class="page-header">
       <div><span class="eyebrow">POST-CLOSE RESEARCH</span><h1>AI 股票研究</h1><p>收盘后推荐、单股分析、收藏快照与七交易日复盘</p></div>
-      <n-tag round :bordered="false" class="market-tag">A 股 · 收盘后分析</n-tag>
+      <n-tag round :bordered="false" class="market-tag">{{ dataMode }} · A 股收盘后</n-tag>
     </header>
 
-    <n-alert type="warning" :show-icon="true" class="demo-alert">
+    <n-alert v-if="dataMode === '演示数据'" type="warning" :show-icon="true" class="demo-alert">
       当前页面使用固定测试数据验证产品交互，概率标注为模型估计、非实际结果，不构成投资建议。
     </n-alert>
+    <n-alert v-else type="info" :show-icon="true" class="demo-alert">本页读取本机数据库中的推荐与复盘记录；上涨概率仍是模型估计、非实际结果。</n-alert>
+    <n-alert v-if="recordError" type="error" class="demo-alert">读取或保存本地推荐记录失败：{{ recordError }}</n-alert>
 
     <n-tabs v-model:value="activeTab" type="segment" animated class="product-tabs">
       <n-tab-pane name="today" tab="今日推荐">
         <div class="section-heading"><div><h2>收盘后精选</h2><p>目标 10～20 只；证据不足时不强行凑数</p></div><span class="updated">数据截止 2026-08-20 收盘</span></div>
-        <section class="recommend-grid">
+        <n-empty v-if="!loadingRecords && recommendations.length === 0" description="本地还没有推荐记录" class="manual-empty" />
+        <section v-else class="recommend-grid">
           <n-card v-for="stock in recommendations" :key="stock.code" class="stock-card" :bordered="false">
             <div class="stock-top"><div><h3>{{ stock.name }}</h3><span>{{ stock.code }} · ¥{{ stock.price }}</span></div><n-button quaternary circle class="favorite" @click="toggleFavorite(stock)">{{ favoriteCodes.has(stock.code) ? '♥' : '♡' }}</n-button></div>
             <div class="tags"><n-tag v-for="tag in stock.tags" :key="tag" size="small" :type="tagType(tag)" round>{{ tag }}</n-tag></div>
