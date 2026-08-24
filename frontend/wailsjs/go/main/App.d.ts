@@ -393,6 +393,8 @@ export function SaveAIResponseResult(arg1:string,arg2:string,arg3:string,arg4:st
 
 export function SetAIRecommendationFavorite(arg1:number,arg2:boolean):Promise<void>;
 
+export function SearchAIRecommendationCards(arg1:string,arg2:number):Promise<Array<recommendation.RecommendationCard>>;
+
 export function SaveAiAssistantSession(arg1:string,arg2:Array<models.AiAssistantMessage>):Promise<void>;
 
 export function SaveAsMarkdown(arg1:string,arg2:string):Promise<string>;

@@ -774,6 +774,10 @@ export function SetAIRecommendationFavorite(arg1, arg2) {
   return window['go']['main']['App']['SetAIRecommendationFavorite'](arg1, arg2);
 }
 
+export function SearchAIRecommendationCards(arg1, arg2) {
+  return window['go']['main']['App']['SearchAIRecommendationCards'](arg1, arg2);
+}
+
 export function SaveAiAssistantSession(arg1, arg2) {
   return window['go']['main']['App']['SaveAiAssistantSession'](arg1, arg2);
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go-stock/backend/models"
@@ -57,6 +58,25 @@ func (s *RecommendationViewStore) List(limit int, favoritesOnly bool) ([]Recomme
 	if favoritesOnly {
 		query = query.Joins("JOIN ai_recommendation_favorites f ON f.recommendation_id = ai_recommendation_snapshots.id AND f.is_favorite = ?", true)
 	}
+	return s.project(query)
+}
+
+// Search returns persisted analyses only. It never fabricates a recommendation
+// when the requested stock has not been analyzed.
+func (s *RecommendationViewStore) Search(text string, limit int) ([]RecommendationCard, error) {
+	text = strings.TrimSpace(text)
+	if text == "" || len([]rune(text)) > 80 || limit < 1 || limit > 50 {
+		return nil, errors.New("recommendation search requires 1-80 characters and limit 1-50")
+	}
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(text)
+	pattern := "%" + escaped + "%"
+	query := s.db.Model(&models.AIRecommendationSnapshot{}).
+		Where(`stock_code = ? OR stock_name LIKE ? ESCAPE '\'`, text, pattern).
+		Order("ai_recommendation_snapshots.completed_at DESC, ai_recommendation_snapshots.id DESC").Limit(limit)
+	return s.project(query)
+}
+
+func (s *RecommendationViewStore) project(query *gorm.DB) ([]RecommendationCard, error) {
 	var snapshots []models.AIRecommendationSnapshot
 	if err := query.Find(&snapshots).Error; err != nil {
 		return nil, fmt.Errorf("list recommendation snapshots: %w", err)

@@ -1,12 +1,13 @@
 <script setup>
 import {computed, onMounted, ref} from 'vue'
 import {NAlert, NButton, NCard, NDataTable, NEmpty, NInput, NInputGroup, NProgress, NTabPane, NTabs, NTag} from 'naive-ui'
-import {GetAIRecommendationCards, SetAIRecommendationFavorite} from '../../wailsjs/go/main/App'
+import {GetAIRecommendationCards, SearchAIRecommendationCards, SetAIRecommendationFavorite} from '../../wailsjs/go/main/App'
 
 const activeTab = ref('today')
 const query = ref('')
 const analyzing = ref(false)
 const analyzedStock = ref(null)
+const searchMessage = ref('')
 const loadingRecords = ref(false)
 const recordError = ref('')
 const dataMode = ref('演示数据')
@@ -83,10 +84,21 @@ async function analyze() {
   if (!query.value.trim()) return
   analyzing.value = true
   analyzedStock.value = null
-  await new Promise(resolve => setTimeout(resolve, 550))
-  const existing = recommendations.value.find(item => item.code === query.value.trim() || item.name.includes(query.value.trim()))
-  analyzedStock.value = existing || {code: query.value.trim().toUpperCase(), name: '搜索结果示例', price: 18.62, probability: 61, range: '-1.6% ～ +5.3%', index: 64, level: '值得关注', tags: ['A股'], reason: '当前为固定测试数据，用于确认手动分析的页面流程。', risk: '尚未接入真实收盘数据和模型，不能据此交易。', completedAt: '演示结果'}
-  analyzing.value = false
+  searchMessage.value = ''
+  try {
+    if (window.go?.main?.App?.SearchAIRecommendationCards) {
+      const results = await SearchAIRecommendationCards(query.value.trim(), 10)
+      analyzedStock.value = results.length ? backendCard(results[0]) : null
+      if (!results.length) searchMessage.value = '本地没有这只股票的历史分析。真实模型尚未配置时不会生成虚构结果。'
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 350))
+      const existing = recommendations.value.find(item => item.code === query.value.trim() || item.name.includes(query.value.trim()))
+      analyzedStock.value = existing || null
+      if (!existing) searchMessage.value = '演示数据中没有匹配记录。'
+    }
+  } catch (error) {
+    searchMessage.value = error?.message || String(error)
+  } finally { analyzing.value = false }
 }
 
 const reviewColumns = [
@@ -133,6 +145,7 @@ const reviewColumns = [
       <n-tab-pane name="manual" tab="手动分析">
         <section class="manual-panel"><div class="manual-copy"><span class="eyebrow">SINGLE STOCK</span><h2>搜索一只 A 股</h2><p>选择股票后才启动分析，不会在输入每个字符时调用模型。</p></div><n-input-group><n-input v-model:value="query" size="large" placeholder="输入代码或名称，例如 600519" clearable @keyup.enter="analyze"/><n-button size="large" type="primary" color="#d75f83" :loading="analyzing" @click="analyze">开始分析</n-button></n-input-group></section>
         <n-empty v-if="!analyzedStock && !analyzing" description="搜索结果将在这里展示上涨概率、预计区间和 AI 推荐指数" class="manual-empty" />
+        <n-alert v-if="searchMessage" type="warning" class="manual-message">{{ searchMessage }}</n-alert>
         <n-card v-if="analyzedStock" class="manual-result" :bordered="false"><div class="stock-top"><div><h3>{{ analyzedStock.name }}</h3><span>{{ analyzedStock.code }} · ¥{{ analyzedStock.price }}</span></div><n-button secondary round color="#cc557b" @click="toggleFavorite(analyzedStock)">{{ favoriteCodes.has(analyzedStock.code) ? '已收藏 ♥' : '收藏 ♡' }}</n-button></div><div class="result-metrics"><div><span>7日上涨概率</span><strong>{{ analyzedStock.probability }}%</strong></div><div><span>预计涨跌区间</span><strong>{{ analyzedStock.range }}</strong></div><div><span>AI推荐指数</span><strong>{{ analyzedStock.index }}</strong></div></div><n-alert type="info" :show-icon="false">{{ analyzedStock.reason }} 风险：{{ analyzedStock.risk }}</n-alert></n-card>
       </n-tab-pane>
 

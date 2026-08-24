@@ -51,3 +51,33 @@ func TestRecommendationViewStoreRejectsInvalidLimit(t *testing.T) {
 		t.Fatal("expected invalid limit rejection")
 	}
 }
+
+func TestRecommendationViewStoreSearchesPersistedRecords(t *testing.T) {
+	_, _, database := analysisJobStore(t)
+	now := time.Date(2026, 8, 20, 16, 0, 0, 0, time.UTC)
+	rows := []models.AIRecommendationSnapshot{
+		{SourceType: SourceAutomatic, ValidationBatchID: 1, StrategyVersion: "search-test", StockCode: "600519", StockName: "贵州茅台", RiskLabelsJSON: `[]`, CompletedAt: now, ProbabilityNotice: ProbabilityNotice},
+		{SourceType: SourceAutomatic, ValidationBatchID: 2, StrategyVersion: "search-test", StockCode: "300750", StockName: "宁德时代", RiskLabelsJSON: `[]`, CompletedAt: now.Add(-time.Hour), ProbabilityNotice: ProbabilityNotice},
+	}
+	for index := range rows {
+		if err := database.Create(&rows[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	store, _ := NewRecommendationViewStore(database)
+	byCode, err := store.Search("600519", 10)
+	if err != nil || len(byCode) != 1 || byCode[0].StockName != "贵州茅台" {
+		t.Fatalf("unexpected code search: %+v %v", byCode, err)
+	}
+	byName, err := store.Search("时代", 10)
+	if err != nil || len(byName) != 1 || byName[0].StockCode != "300750" {
+		t.Fatalf("unexpected name search: %+v %v", byName, err)
+	}
+	wildcard, err := store.Search("%", 10)
+	if err != nil || len(wildcard) != 0 {
+		t.Fatalf("wildcard escaped incorrectly: %+v %v", wildcard, err)
+	}
+	if _, err := store.Search("", 10); err == nil {
+		t.Fatal("expected empty search rejection")
+	}
+}

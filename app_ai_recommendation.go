@@ -80,6 +80,14 @@ func (a *App) GetAIRecommendationCards(limit int, favoritesOnly bool) ([]recomme
 	return store.List(limit, favoritesOnly)
 }
 
+func (a *App) SearchAIRecommendationCards(query string, limit int) ([]recommendation.RecommendationCard, error) {
+	store, err := recommendation.NewRecommendationViewStore(db.Dao)
+	if err != nil {
+		return nil, err
+	}
+	return store.Search(query, limit)
+}
+
 // SetAIRecommendationFavorite changes only the favorite relationship. The
 // immutable prediction and its later review are deliberately retained.
 func (a *App) SetAIRecommendationFavorite(recommendationID uint, favorite bool) error {
