@@ -80,6 +80,9 @@ func (a *App) startup(ctx context.Context) {
 	InitSystray(a)
 
 	a.ctx = ctx
+	if err := a.startAIShadowRuntime(ctx); err != nil {
+		logger.SugaredLogger.Errorf("start AI shadow runtime: %v", err)
+	}
 
 	// 设置全局 Wails 上下文，供 AI 工具修改分组/概念后向前端推送刷新事件
 	data.SetAppCtx(ctx)

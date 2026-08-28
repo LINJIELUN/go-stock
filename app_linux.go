@@ -9,7 +9,9 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
+	"go-stock/backend/recommendation"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/coocood/freecache"
@@ -23,9 +25,11 @@ import (
 
 // App struct
 type App struct {
-	ctx   context.Context
-	cache *freecache.Cache
-	cron  *data.CronTaskManager
+	ctx             context.Context
+	cache           *freecache.Cache
+	cron            *data.CronTaskManager
+	shadowRuntimeMu sync.RWMutex
+	shadowRuntime   *recommendation.RuntimeController
 }
 
 // NewApp creates a new App application struct
@@ -49,6 +53,9 @@ func (a *App) startup(ctx context.Context) {
 	logger.SugaredLogger.Infof("Version:%s", Version)
 	// Perform your setup here
 	a.ctx = ctx
+	if err := a.startAIShadowRuntime(ctx); err != nil {
+		logger.SugaredLogger.Errorf("start AI shadow runtime: %v", err)
+	}
 
 	// 设置全局 Wails 上下文，供 AI 工具修改分组/概念后向前端推送刷新事件
 	data.SetAppCtx(ctx)
@@ -144,7 +151,11 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 
 // shutdown is called at application termination
 func (a *App) shutdown(ctx context.Context) {
-	// Perform your teardown here
+	stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.stopAIShadowRuntime(stopCtx); err != nil {
+		logger.SugaredLogger.Errorf("stop AI shadow runtime: %v", err)
+	}
 }
 
 // Greet returns a greeting for the given name
