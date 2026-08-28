@@ -1,6 +1,6 @@
 <script setup>
 import {computed, onMounted, ref} from 'vue'
-import {NAlert, NButton, NCard, NDataTable, NEmpty, NInput, NInputGroup, NProgress, NTabPane, NTabs, NTag} from 'naive-ui'
+import {NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NEmpty, NInput, NInputGroup, NModal, NProgress, NTabPane, NTabs, NTag} from 'naive-ui'
 import {GetAIRecommendationCards, SearchAIRecommendationCards, SetAIRecommendationFavorite} from '../../wailsjs/go/main/App'
 
 const activeTab = ref('today')
@@ -8,6 +8,7 @@ const query = ref('')
 const analyzing = ref(false)
 const analyzedStock = ref(null)
 const searchMessage = ref('')
+const selectedStock = ref(null)
 const loadingRecords = ref(false)
 const recordError = ref('')
 const dataMode = ref('演示数据')
@@ -29,6 +30,9 @@ const reviews = ref([
 const favoriteRows = computed(() => reviews.value.filter(item => favoriteCodes.value.has(item.code)))
 const tagType = tag => tag.includes('ST') || tag === '新股' ? 'warning' : tag === 'ETF' ? 'info' : 'default'
 const indexColor = value => value >= 75 ? '#db5b83' : value >= 60 ? '#ed8aa8' : '#d9a4b3'
+const latestDataTime = computed(() => recommendations.value.length ? recommendations.value[0].completedAt : '暂无数据')
+const hitText = value => value === undefined || value === null ? '待复盘' : value ? '命中' : '未命中'
+const valueText = (value, suffix = '') => value === undefined || value === null ? '待复盘' : `${Number(value).toFixed(2)}${suffix}`
 
 async function toggleFavorite(stock) {
   const next = new Set(favoriteCodes.value)
@@ -128,7 +132,7 @@ const reviewColumns = [
 
     <n-tabs v-model:value="activeTab" type="segment" animated class="product-tabs">
       <n-tab-pane name="today" tab="今日推荐">
-        <div class="section-heading"><div><h2>收盘后精选</h2><p>目标 10～20 只；证据不足时不强行凑数</p></div><span class="updated">数据截止 2026-08-20 收盘</span></div>
+        <div class="section-heading"><div><h2>收盘后精选</h2><p>目标 10～20 只；证据不足时不强行凑数</p></div><span class="updated">最近记录 {{ latestDataTime }}</span></div>
         <n-empty v-if="!loadingRecords && recommendations.length === 0" description="本地还没有推荐记录" class="manual-empty" />
         <section v-else class="recommend-grid">
           <n-card v-for="stock in recommendations" :key="stock.code" class="stock-card" :bordered="false">
@@ -137,7 +141,7 @@ const reviewColumns = [
             <div class="prediction"><div><span>7日上涨概率</span><strong>{{ stock.probability }}%</strong><small>模型估计、非实际结果</small></div><div><span>预计涨跌区间</span><strong>{{ stock.range }}</strong><small>第七交易日收盘</small></div></div>
             <div class="index-row"><div><span>AI推荐指数</span><b>{{ stock.index }}</b><small>{{ stock.level }}</small></div><n-progress type="line" :percentage="stock.index" :show-indicator="false" :color="indexColor(stock.index)" rail-color="#f8e8ed" /></div>
             <p class="reason"><b>研究摘要</b>{{ stock.reason }}</p><p class="risk"><b>主要风险</b>{{ stock.risk }}</p>
-            <div class="card-footer"><span>{{ stock.completedAt }}</span><n-button text color="#cc557b">查看分析详情 →</n-button></div>
+            <div class="card-footer"><span>{{ stock.completedAt }}</span><n-button text color="#cc557b" @click="selectedStock = stock">查看分析详情 →</n-button></div>
           </n-card>
         </section>
       </n-tab-pane>
@@ -154,9 +158,24 @@ const reviewColumns = [
         <n-data-table :columns="reviewColumns" :data="favoriteRows" :bordered="false" class="review-table" />
       </n-tab-pane>
     </n-tabs>
+
+    <n-modal :show="!!selectedStock" preset="card" :bordered="false" class="detail-modal" style="width:min(760px,calc(100vw - 32px))" @update:show="value => { if (!value) selectedStock = null }">
+      <template #header><div v-if="selectedStock"><strong>{{ selectedStock.name }}</strong><small>{{ selectedStock.code }} · 推荐快照详情</small></div></template>
+      <template v-if="selectedStock">
+        <div class="detail-hero"><div><span>7日上涨概率</span><b>{{ selectedStock.probability }}%</b><small>模型估计、非实际结果</small></div><div><span>预计涨跌区间</span><b>{{ selectedStock.range }}</b><small>相对推荐基准价</small></div><div><span>AI推荐指数</span><b>{{ selectedStock.index }}</b><small>{{ selectedStock.level }}</small></div></div>
+        <div class="detail-tags"><n-tag v-for="tag in selectedStock.tags" :key="tag" size="small" :type="tagType(tag)" round>{{ tag }}</n-tag></div>
+        <n-card title="分析结论" size="small" class="detail-section"><p><b>研究摘要</b>{{ selectedStock.reason }}</p><p><b>风险因素</b>{{ selectedStock.risk }}</p></n-card>
+        <n-descriptions label-placement="top" :column="3" bordered class="detail-section">
+          <n-descriptions-item label="推荐基准价">¥{{ selectedStock.price }}</n-descriptions-item><n-descriptions-item label="分析完成时间">{{ selectedStock.completedAt }}</n-descriptions-item><n-descriptions-item label="计划复盘日">{{ selectedStock.dueDate || '待计算' }}</n-descriptions-item>
+          <n-descriptions-item label="实际涨跌幅">{{ valueText(selectedStock.actualReturn, '%') }}</n-descriptions-item><n-descriptions-item label="方向判断">{{ hitText(selectedStock.directionHit) }}</n-descriptions-item><n-descriptions-item label="区间判断">{{ hitText(selectedStock.rangeHit) }}</n-descriptions-item>
+          <n-descriptions-item label="区间外偏差">{{ valueText(selectedStock.deviation, '%') }}</n-descriptions-item><n-descriptions-item label="记录类型">{{ selectedStock.id ? '本地持久化记录' : '交互演示记录' }}</n-descriptions-item><n-descriptions-item label="收藏状态">{{ favoriteCodes.has(selectedStock.code) ? '已收藏' : '未收藏' }}</n-descriptions-item>
+        </n-descriptions>
+        <div class="detail-actions"><n-button secondary @click="selectedStock = null">关闭</n-button><n-button type="primary" color="#d75f83" @click="toggleFavorite(selectedStock)">{{ favoriteCodes.has(selectedStock.code) ? '取消收藏' : '收藏快照' }}</n-button></div>
+      </template>
+    </n-modal>
   </main>
 </template>
 
 <style scoped>
-.recommend-page{min-height:100%;padding:28px;background:linear-gradient(145deg,#fffafa 0%,#fff5f7 55%,#fdf1f5 100%);color:#39252d}.page-header,.section-heading,.stock-top,.card-footer{display:flex;align-items:center;justify-content:space-between;gap:16px}.page-header{margin-bottom:18px}.page-header h1{margin:5px 0 4px;font-size:30px}.page-header p,.section-heading p,.manual-copy p{margin:0;color:#8a6a75}.eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;color:#d45f83}.market-tag{background:#f8dce5;color:#a83e61}.demo-alert{margin-bottom:18px;border-radius:12px}.product-tabs{--n-tab-color-segment:#f8e6ec}.section-heading{margin:22px 0 16px}.section-heading h2,.manual-copy h2{margin:0 0 5px}.updated{font-size:12px;color:#a77c8b}.recommend-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.stock-card,.manual-result{border:1px solid #f1dce3;border-radius:18px;background:rgba(255,255,255,.94);box-shadow:0 10px 30px rgba(155,74,101,.08)}.stock-top{align-items:flex-start}.stock-top h3{margin:0 0 3px;font-size:20px}.stock-top span{font-size:13px;color:#97717f}.favorite{font-size:24px;color:#cf5479}.tags{display:flex;gap:6px;margin:12px 0}.prediction,.result-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.prediction>div,.result-metrics>div{padding:13px;border-radius:12px;background:#fff5f7}.prediction span,.prediction small,.result-metrics span{display:block;color:#96717f;font-size:12px}.prediction strong,.result-metrics strong{display:block;margin:4px 0;color:#8f2f50;font-size:19px}.index-row{margin:15px 0}.index-row>div{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}.index-row b{color:#c94f76;font-size:25px}.index-row small{color:#a87a89}.reason,.risk{margin:9px 0;font-size:13px;line-height:1.65;color:#604750}.reason b,.risk b{display:block;color:#9d4965}.card-footer{margin-top:14px;padding-top:12px;border-top:1px solid #f3e4e9;font-size:12px;color:#a88792}.manual-panel{max-width:820px;margin:26px auto 18px;padding:28px;border:1px solid #f0d6df;border-radius:20px;background:#fff}.manual-copy{margin-bottom:18px}.manual-empty{padding:70px}.manual-result{max-width:820px;margin:0 auto}.result-metrics{grid-template-columns:repeat(3,1fr);margin:20px 0}.review-table{margin-top:10px;border:1px solid #efdce3;border-radius:16px;overflow:hidden}.review-table :deep(th){background:#fff1f5!important;color:#9d4965!important}@media(max-width:900px){.recommend-grid{grid-template-columns:1fr}}@media(max-width:640px){.recommend-page{padding:16px}.page-header,.section-heading{align-items:flex-start;flex-direction:column}.prediction,.result-metrics{grid-template-columns:1fr}}
+.recommend-page{min-height:100%;padding:28px;background:linear-gradient(145deg,#fffafa 0%,#fff5f7 55%,#fdf1f5 100%);color:#39252d}.page-header,.section-heading,.stock-top,.card-footer{display:flex;align-items:center;justify-content:space-between;gap:16px}.page-header{margin-bottom:18px}.page-header h1{margin:5px 0 4px;font-size:30px}.page-header p,.section-heading p,.manual-copy p{margin:0;color:#8a6a75}.eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;color:#d45f83}.market-tag{background:#f8dce5;color:#a83e61}.demo-alert{margin-bottom:18px;border-radius:12px}.product-tabs{--n-tab-color-segment:#f8e6ec}.section-heading{margin:22px 0 16px}.section-heading h2,.manual-copy h2{margin:0 0 5px}.updated{font-size:12px;color:#a77c8b}.recommend-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.stock-card,.manual-result{border:1px solid #f1dce3;border-radius:18px;background:rgba(255,255,255,.94);box-shadow:0 10px 30px rgba(155,74,101,.08)}.stock-top{align-items:flex-start}.stock-top h3{margin:0 0 3px;font-size:20px}.stock-top span{font-size:13px;color:#97717f}.favorite{font-size:24px;color:#cf5479}.tags,.detail-tags{display:flex;gap:6px;margin:12px 0}.prediction,.result-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.prediction>div,.result-metrics>div{padding:13px;border-radius:12px;background:#fff5f7}.prediction span,.prediction small,.result-metrics span{display:block;color:#96717f;font-size:12px}.prediction strong,.result-metrics strong{display:block;margin:4px 0;color:#8f2f50;font-size:19px}.index-row{margin:15px 0}.index-row>div{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}.index-row b{color:#c94f76;font-size:25px}.index-row small{color:#a87a89}.reason,.risk{margin:9px 0;font-size:13px;line-height:1.65;color:#604750}.reason b,.risk b,.detail-section b{display:block;color:#9d4965}.card-footer{margin-top:14px;padding-top:12px;border-top:1px solid #f3e4e9;font-size:12px;color:#a88792}.manual-panel{max-width:820px;margin:26px auto 18px;padding:28px;border:1px solid #f0d6df;border-radius:20px;background:#fff}.manual-copy{margin-bottom:18px}.manual-empty{padding:70px}.manual-message{max-width:820px;margin:0 auto 16px}.manual-result{max-width:820px;margin:0 auto}.result-metrics{grid-template-columns:repeat(3,1fr);margin:20px 0}.review-table{margin-top:10px;border:1px solid #efdce3;border-radius:16px;overflow:hidden}.review-table :deep(th){background:#fff1f5!important;color:#9d4965!important}.detail-modal :deep(.n-card){border-radius:20px}.detail-modal small{display:block;color:#a77c8b}.detail-hero{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.detail-hero>div{padding:16px;border-radius:14px;background:#fff3f6}.detail-hero span,.detail-hero small{font-size:12px;color:#96717f}.detail-hero b{display:block;margin:5px 0;color:#a63359;font-size:22px}.detail-section{margin-top:14px}.detail-section p{line-height:1.7}.detail-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}@media(max-width:900px){.recommend-grid{grid-template-columns:1fr}}@media(max-width:640px){.recommend-page{padding:16px}.page-header,.section-heading{align-items:flex-start;flex-direction:column}.prediction,.result-metrics,.detail-hero{grid-template-columns:1fr}}
 </style>
