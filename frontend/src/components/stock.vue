@@ -130,6 +130,8 @@ const message = useMessage()
 const notify = useNotification()
 const stocks = ref([])
 const results = ref({})
+const watchlistRefreshing = ref(false)
+const watchlistUpdatedAt = ref('尚未刷新')
 const stockList = ref([])
 const followList = ref([])
 const groupList = ref([])
@@ -1571,6 +1573,7 @@ async function updateData(result) {
   result.lastChangePercent = _prev ? _prev.changePercent : 0
   result.lastProfitAmountToday = _prev ? _prev.profitAmountToday : 0
   results.value[result.key] = result
+  watchlistUpdatedAt.value = `${result['日期'] || ''} ${result['时间'] || ''}`.trim() || new Date().toLocaleTimeString()
   if (!stocks.value.includes(_stockCode)) {
     delete results.value[result.key]
   }
@@ -1585,6 +1588,25 @@ async function monitor() {
     Greet(code).then(result => {
       updateData(result)
     })
+  }
+}
+
+// 手动刷新只复用已有的本地自选与行情接口；不在前端伪造“实时”数据。
+async function refreshWatchlist() {
+  if (watchlistRefreshing.value || stocks.value.length === 0) return
+  watchlistRefreshing.value = true
+  try {
+    const refreshed = await Promise.allSettled(stocks.value.map(code => Greet(code)))
+    let successCount = 0
+    for (const item of refreshed) {
+      if (item.status === 'fulfilled' && item.value && item.value['股票代码']) {
+        updateData(item.value)
+        successCount += 1
+      }
+    }
+    if (successCount === 0) message.warning('未取得可用行情，请稍后重试')
+  } finally {
+    watchlistRefreshing.value = false
   }
 }
 
@@ -3712,7 +3734,10 @@ watch([tdxAmountFilter, filteredTdxTransactionList], () => {
                     placeholder="全部概念" style="width:180px;" filterable
                     :consistent-menu-width="false" />
           <n-text depth="3" style="font-size:12px;">共 {{ allTableData.length }} 只</n-text>
+          <n-text depth="3" style="font-size:12px;">最近行情 {{ watchlistUpdatedAt }}</n-text>
+          <n-button size="small" tertiary type="primary" :loading="watchlistRefreshing" @click="refreshWatchlist">刷新行情</n-button>
         </div>
+        <n-text depth="3" style="display:block;margin:0 0 8px;font-size:12px;">开市期间由后台按设置的刷新间隔更新；非交易时段显示最后一次可用行情。</n-text>
         <n-data-table
           :columns="allTableColumns"
           :data="allTableData"
