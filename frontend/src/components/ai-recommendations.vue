@@ -11,21 +11,24 @@ const searchMessage = ref('')
 const selectedStock = ref(null)
 const loadingRecords = ref(false)
 const recordError = ref('')
-const dataMode = ref('演示数据')
+const isDesktopRuntime = Boolean(window.go?.main?.App?.GetAIRecommendationCards)
 
-// 第一轮只验证完整产品交互；接入真实模型前必须移除这些演示记录。
-const recommendations = ref([
+// 浏览器预览保留少量固定记录；桌面应用从首帧起只展示本地真实记录。
+const demoRecommendations = [
   {code: '600519', name: '贵州茅台', price: 1486.32, probability: 68, range: '+2.4% ～ +7.1%', index: 76, level: '高度关注', tags: ['沪市'], reason: '盈利质量稳定，近期波动收敛，趋势因子保持正向。', risk: '消费复苏不及预期；估值仍处于较高区间。', completedAt: '2026-08-20 16:08'},
   {code: '300750', name: '宁德时代', price: 268.45, probability: 63, range: '-1.8% ～ +6.2%', index: 69, level: '值得关注', tags: ['创业板'], reason: '成交活跃度较好，产业链信息偏正面，但预测区间较宽。', risk: '行业价格竞争和海外政策变化可能放大波动。', completedAt: '2026-08-20 16:21'},
   {code: '159915', name: '创业板ETF', price: 2.146, probability: 57, range: '-2.5% ～ +4.0%', index: 58, level: '谨慎观察', tags: ['ETF'], reason: '分散单股风险，短期趋势尚未形成强一致性。', risk: '指数波动与市场风险偏好高度相关。', completedAt: '2026-08-20 16:34'},
   {code: '920799', name: '艾融软件', price: 42.18, probability: 54, range: '-5.2% ～ +8.6%', index: 46, level: '谨慎观察', tags: ['北交所', '新股'], reason: '成长性具备观察价值，但历史样本和流动性证据有限。', risk: '新股样本不足、波动较高，预测不确定性明显。', completedAt: '2026-08-20 16:48'},
-])
+]
 
-const favoriteCodes = ref(new Set(['600519', '300750']))
-const reviews = ref([
+const demoReviews = [
   {code: '600519', name: '贵州茅台', frozenAt: '2026-08-11 16:12', probability: 66, predictedRange: '+1.5% ～ +6.0%', index: 73, dueDate: '2026-08-20', actualReturn: '+3.82%', direction: '命中', interval: '命中', deviation: '0.00%', status: 'completed'},
   {code: '300750', name: '宁德时代', frozenAt: '2026-08-18 16:28', probability: 62, predictedRange: '-2.0% ～ +5.8%', index: 67, dueDate: '2026-08-27', actualReturn: '待复盘', direction: '—', interval: '—', deviation: '—', status: 'pending'},
-])
+]
+const dataMode = ref(isDesktopRuntime ? '本地推荐记录' : '演示数据')
+const recommendations = ref(isDesktopRuntime ? [] : demoRecommendations)
+const favoriteCodes = ref(new Set(isDesktopRuntime ? [] : ['600519', '300750']))
+const reviews = ref(isDesktopRuntime ? [] : demoReviews)
 
 const favoriteRows = computed(() => reviews.value.filter(item => favoriteCodes.value.has(item.code)))
 const tagType = tag => tag.includes('ST') || tag === '新股' ? 'warning' : tag === 'ETF' ? 'info' : 'default'
@@ -65,7 +68,7 @@ function backendCard(card) {
 }
 
 async function loadPersistedRecords() {
-  if (!window.go?.main?.App?.GetAIRecommendationCards) return
+  if (!isDesktopRuntime) return
   loadingRecords.value = true
   recordError.value = ''
   try {
@@ -90,7 +93,7 @@ async function analyze() {
   analyzedStock.value = null
   searchMessage.value = ''
   try {
-    if (window.go?.main?.App?.SearchAIRecommendationCards) {
+    if (isDesktopRuntime) {
       const results = await SearchAIRecommendationCards(query.value.trim(), 10)
       analyzedStock.value = results.length ? backendCard(results[0]) : null
       if (!results.length) searchMessage.value = '本地没有这只股票的历史分析。真实模型尚未配置时不会生成虚构结果。'
@@ -147,7 +150,7 @@ const reviewColumns = [
       </n-tab-pane>
 
       <n-tab-pane name="manual" tab="手动分析">
-        <section class="manual-panel"><div class="manual-copy"><span class="eyebrow">SINGLE STOCK</span><h2>搜索一只 A 股</h2><p>选择股票后才启动分析，不会在输入每个字符时调用模型。</p></div><n-input-group><n-input v-model:value="query" size="large" placeholder="输入代码或名称，例如 600519" clearable @keyup.enter="analyze"/><n-button size="large" type="primary" color="#d75f83" :loading="analyzing" @click="analyze">开始分析</n-button></n-input-group></section>
+        <section class="manual-panel"><div class="manual-copy"><span class="eyebrow">SINGLE STOCK</span><h2>搜索一只 A 股</h2><p>{{ isDesktopRuntime ? '查询本机已经保存的历史分析；真实模型入口将在数据与模型配置完成后启用。' : '预览模式仅演示搜索与结果展示，不会调用真实模型。' }}</p></div><n-input-group><n-input v-model:value="query" size="large" placeholder="输入代码或名称，例如 600519" clearable @keyup.enter="analyze"/><n-button size="large" type="primary" color="#d75f83" :loading="analyzing" @click="analyze">{{ isDesktopRuntime ? '查询历史分析' : '演示搜索' }}</n-button></n-input-group></section>
         <n-empty v-if="!analyzedStock && !analyzing" description="搜索结果将在这里展示上涨概率、预计区间和 AI 推荐指数" class="manual-empty" />
         <n-alert v-if="searchMessage" type="warning" class="manual-message">{{ searchMessage }}</n-alert>
         <n-card v-if="analyzedStock" class="manual-result" :bordered="false"><div class="stock-top"><div><h3>{{ analyzedStock.name }}</h3><span>{{ analyzedStock.code }} · ¥{{ analyzedStock.price }}</span></div><n-button secondary round color="#cc557b" @click="toggleFavorite(analyzedStock)">{{ favoriteCodes.has(analyzedStock.code) ? '已收藏 ♥' : '收藏 ♡' }}</n-button></div><div class="result-metrics"><div><span>7日上涨概率</span><strong>{{ analyzedStock.probability }}%</strong></div><div><span>预计涨跌区间</span><strong>{{ analyzedStock.range }}</strong></div><div><span>AI推荐指数</span><strong>{{ analyzedStock.index }}</strong></div></div><n-alert type="info" :show-icon="false">{{ analyzedStock.reason }} 风险：{{ analyzedStock.risk }}</n-alert></n-card>

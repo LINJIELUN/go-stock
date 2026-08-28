@@ -601,18 +601,6 @@ const menuOptions = ref([
     key: 'aiRecommendations',
     icon: renderIcon(TrendingUp),
   },
-  {
-    label: () => h(
-        RouterLink,
-        {
-          to: { name: 'aiShadowReport' },
-          onClick: () => { activeKey.value = 'aiShadowReport' },
-        },
-        {default: () => '影子运行报告'}
-    ),
-    key: 'aiShadowReport',
-    icon: renderIcon(StatsChartOutline),
-  },
     {
       label: () =>
           h(
