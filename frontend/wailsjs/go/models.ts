@@ -2039,6 +2039,202 @@ export namespace main {
 
 }
 
+export namespace recommendation {
+	export class RecommendationCard {
+	    id: number; sourceType: string; status: string; stockCode: string; stockName: string;
+	    riskLabels: string[]; completedAt: any; dataAsOf: any; baselinePrice: number;
+	    riseProbability: number; returnRangeLow: number; returnRangeHigh: number;
+	    aiRecommendationIndex: number; rationale: string; riskNotes: string; probabilityNotice: string;
+	    reviewDueDate: any; isFavorite: boolean; actualReviewDate?: any; actualReturnPercent?: number;
+	    directionHit?: boolean; rangeHit?: boolean; outsideRangeDeviation?: number; reviewStatus: string;
+	    static createFrom(source: any = {}) { return new RecommendationCard(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        Object.assign(this, source);
+	        this.riskLabels = source["riskLabels"] || [];
+	    }
+	}
+	export class RuntimeConfigIssue {
+	    code: string;
+	    message: string;
+	    static createFrom(source: any = {}) { return new RuntimeConfigIssue(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.message = source["message"];
+	    }
+	}
+
+	export class RuntimeReadiness {
+	    version: string;
+	    enabled: boolean;
+	    ready: boolean;
+	    issues: RuntimeConfigIssue[];
+	    static createFrom(source: any = {}) { return new RuntimeReadiness(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.enabled = source["enabled"];
+	        this.ready = source["ready"];
+	        this.issues = (source["issues"] || []).map((item: any) => new RuntimeConfigIssue(item));
+	    }
+	}
+	export class ProcessResult {
+	    jobId: number;
+	    status: string;
+	    recommendationId: number;
+	    analysisError: string;
+	    static createFrom(source: any = {}) { return new ProcessResult(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.jobId = source["jobId"];
+	        this.status = source["status"];
+	        this.recommendationId = source["recommendationId"];
+	        this.analysisError = source["analysisError"];
+	    }
+	}
+
+	export class RuntimeTickResult {
+	    runCreated: boolean;
+	    runId: number;
+	    recoveredLeases: number;
+	    processedJobs: ProcessResult[];
+	    completedReviews: number;
+	    static createFrom(source: any = {}) { return new RuntimeTickResult(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.runCreated = source["runCreated"];
+	        this.runId = source["runId"];
+	        this.recoveredLeases = source["recoveredLeases"];
+	        this.processedJobs = this.convertValues(source["processedJobs"], ProcessResult);
+	        this.completedReviews = source["completedReviews"];
+	    }
+	    convertValues(a: any, classs: any, asMap: boolean = false): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        if (typeof a === "object") {
+	            if (asMap) for (const key of Object.keys(a)) a[key] = new classs(a[key]);
+	            else return new classs(a);
+	        }
+	        return a;
+	    }
+	}
+
+	export class RuntimeHealth {
+	    running: boolean;
+	    lastTickStartedAt: any;
+	    lastTickCompletedAt: any;
+	    consecutiveFailures: number;
+	    lastError: string;
+	    lastResult: RuntimeTickResult;
+	    static createFrom(source: any = {}) { return new RuntimeHealth(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.lastTickStartedAt = source["lastTickStartedAt"];
+	        this.lastTickCompletedAt = source["lastTickCompletedAt"];
+	        this.consecutiveFailures = source["consecutiveFailures"];
+	        this.lastError = source["lastError"];
+	        this.lastResult = this.convertValues(source["lastResult"], RuntimeTickResult);
+	    }
+	    convertValues(a: any, classs: any): any { return a ? new classs(a) : a; }
+	}
+
+	export class RuntimeControllerHealth {
+	    configured: boolean;
+	    running: boolean;
+	    lastExit: string;
+	    runtime: RuntimeHealth;
+	    static createFrom(source: any = {}) { return new RuntimeControllerHealth(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.running = source["running"];
+	        this.lastExit = source["lastExit"];
+	        this.runtime = source["runtime"] ? new RuntimeHealth(source["runtime"]) : source["runtime"];
+	    }
+	}
+
+	export class ShadowCohort {
+	    strategyVersion: string;
+	    modelVersion: string;
+	    promptVersion: string;
+	    generatedSnapshots: number;
+	    firstCompletedAt: any;
+	    lastCompletedAt: any;
+
+	    static createFrom(source: any = {}) {
+	        return new ShadowCohort(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.strategyVersion = source["strategyVersion"];
+	        this.modelVersion = source["modelVersion"];
+	        this.promptVersion = source["promptVersion"];
+	        this.generatedSnapshots = source["generatedSnapshots"];
+	        this.firstCompletedAt = source["firstCompletedAt"];
+	        this.lastCompletedAt = source["lastCompletedAt"];
+	    }
+	}
+
+	export class ShadowReport {
+	    windowStart: any;
+	    windowEnd: any;
+	    strategyVersion: string;
+	    modelVersion: string;
+	    promptVersion: string;
+	    generatedSnapshots: number;
+	    completedReviews: number;
+	    delayedReviews: number;
+	    pendingReviews: number;
+	    directionHitRatePercent?: number;
+	    rangeHitRatePercent?: number;
+	    meanActualReturnPercent?: number;
+	    meanOutsideDeviation?: number;
+	    settledModelCostUsd: number;
+	    committedModelCostUsd: number;
+	    uncertainModelUsageCount: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ShadowReport(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.windowStart = this.convertValues(source["windowStart"], null);
+	        this.windowEnd = this.convertValues(source["windowEnd"], null);
+	        this.strategyVersion = source["strategyVersion"];
+	        this.modelVersion = source["modelVersion"];
+	        this.promptVersion = source["promptVersion"];
+	        this.generatedSnapshots = source["generatedSnapshots"];
+	        this.completedReviews = source["completedReviews"];
+	        this.delayedReviews = source["delayedReviews"];
+	        this.pendingReviews = source["pendingReviews"];
+	        this.directionHitRatePercent = source["directionHitRatePercent"];
+	        this.rangeHitRatePercent = source["rangeHitRatePercent"];
+	        this.meanActualReturnPercent = source["meanActualReturnPercent"];
+	        this.meanOutsideDeviation = source["meanOutsideDeviation"];
+	        this.settledModelCostUsd = source["settledModelCostUsd"];
+	        this.committedModelCostUsd = source["committedModelCostUsd"];
+	        this.uncertainModelUsageCount = source["uncertainModelUsageCount"];
+	    }
+
+	    convertValues(a: any, classs: any, asMap: boolean = false): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        if (typeof a === "object") {
+	            if (asMap) {
+	                for (const key of Object.keys(a)) a[key] = new classs(a[key]);
+	                return a;
+	            }
+	            return new classs(a);
+	        }
+	        return a;
+	    }
+	}
+}
+
 export namespace models {
 	
 	export class AIResponseResult {
@@ -3711,4 +3907,3 @@ export namespace models {
 	}
 
 }
-

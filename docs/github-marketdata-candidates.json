@@ -1,0 +1,72 @@
+[
+  {
+    "fullName": "akfamily/akshare",
+    "url": "https://github.com/akfamily/akshare",
+    "description": "AKShare is an elegant and simple financial data interface library for Python, built for human beings! 开源财经数据接口库",
+    "stars": 22072,
+    "forks": 3450,
+    "openIssues": 0,
+    "archived": false,
+    "licenseSpdx": "MIT",
+    "defaultBranch": "main",
+    "pushedAt": "2026-08-13T18:01:15Z",
+    "fetchedAt": "2026-08-17T02:53:07.081774645Z",
+    "popularityOnly": true
+  },
+  {
+    "fullName": "waditu/tushare",
+    "url": "https://github.com/waditu/tushare",
+    "description": "TuShare is a utility for crawling historical data of China stocks",
+    "stars": 15352,
+    "forks": 4440,
+    "openIssues": 754,
+    "archived": false,
+    "licenseSpdx": "BSD-3-Clause",
+    "defaultBranch": "master",
+    "pushedAt": "2024-03-13T14:31:20Z",
+    "fetchedAt": "2026-08-17T02:53:07.959946113Z",
+    "popularityOnly": true
+  },
+  {
+    "fullName": "Micro-sheep/efinance",
+    "url": "https://github.com/Micro-sheep/efinance",
+    "description": "efinance 是一个可以快速获取基金、股票、债券、期货数据的 Python 库，回测以及量化交易的好帮手！🚀🚀🚀",
+    "stars": 3939,
+    "forks": 741,
+    "openIssues": 151,
+    "archived": false,
+    "licenseSpdx": "MIT",
+    "defaultBranch": "main",
+    "pushedAt": "2026-07-17T07:47:42Z",
+    "fetchedAt": "2026-08-17T02:53:07.275249055Z",
+    "popularityOnly": true
+  },
+  {
+    "fullName": "mootdx/mootdx",
+    "url": "https://github.com/mootdx/mootdx",
+    "description": "通达信数据读取的一个简便使用封装",
+    "stars": 2207,
+    "forks": 581,
+    "openIssues": 99,
+    "archived": false,
+    "licenseSpdx": "MIT",
+    "defaultBranch": "master",
+    "pushedAt": "2024-07-16T09:09:05Z",
+    "fetchedAt": "2026-08-17T02:53:07.535650601Z",
+    "popularityOnly": true
+  },
+  {
+    "fullName": "rainx/pytdx",
+    "url": "https://github.com/rainx/pytdx",
+    "description": "Python tdx数据接口",
+    "stars": 1553,
+    "forks": 1045,
+    "openIssues": 49,
+    "archived": true,
+    "licenseSpdx": "",
+    "defaultBranch": "archive",
+    "pushedAt": "2020-04-15T13:02:24Z",
+    "fetchedAt": "2026-08-17T02:53:07.736380767Z",
+    "popularityOnly": true
+  }
+]
