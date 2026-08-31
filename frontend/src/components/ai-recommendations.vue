@@ -27,10 +27,14 @@ const demoReviews = [
 ]
 const dataMode = ref(isDesktopRuntime ? '本地推荐记录' : '演示数据')
 const recommendations = ref(isDesktopRuntime ? [] : demoRecommendations)
-const favoriteCodes = ref(new Set(isDesktopRuntime ? [] : ['600519', '300750']))
+// 收藏关系属于一条不可变推荐快照，而不是股票代码。同一股票在不同日期
+// 可以有多条预测，用户应当能够分别收藏和取消收藏。
+const favoriteKeys = ref(new Set(isDesktopRuntime ? [] : ['demo:600519', 'demo:300750']))
 const reviews = ref(isDesktopRuntime ? [] : demoReviews)
 
-const favoriteRows = computed(() => reviews.value.filter(item => favoriteCodes.value.has(item.code)))
+const snapshotKey = stock => stock.id ? `record:${stock.id}` : `demo:${stock.code}`
+const isFavorite = stock => favoriteKeys.value.has(snapshotKey(stock))
+const favoriteRows = computed(() => reviews.value.filter(item => favoriteKeys.value.has(item.snapshotKey || `demo:${item.code}`)))
 const tagType = tag => tag.includes('ST') || tag === '新股' ? 'warning' : tag === 'ETF' ? 'info' : 'default'
 const indexColor = value => value >= 75 ? '#db5b83' : value >= 60 ? '#ed8aa8' : '#d9a4b3'
 const latestDataTime = computed(() => recommendations.value.length ? recommendations.value[0].completedAt : '暂无数据')
@@ -38,19 +42,20 @@ const hitText = value => value === undefined || value === null ? '待复盘' : v
 const valueText = (value, suffix = '') => value === undefined || value === null ? '待复盘' : `${Number(value).toFixed(2)}${suffix}`
 
 async function toggleFavorite(stock) {
-  const next = new Set(favoriteCodes.value)
-  const favorite = !next.has(stock.code)
-  favorite ? next.add(stock.code) : next.delete(stock.code)
-  favoriteCodes.value = next
-  if (!reviews.value.some(item => item.code === stock.code)) {
-    reviews.value.push({code: stock.code, name: stock.name, frozenAt: stock.completedAt, probability: stock.probability, predictedRange: stock.range, index: stock.index, dueDate: '待计算', actualReturn: '待复盘', direction: '—', interval: '—', deviation: '—', status: 'pending'})
+  const key = snapshotKey(stock)
+  const next = new Set(favoriteKeys.value)
+  const favorite = !next.has(key)
+  favorite ? next.add(key) : next.delete(key)
+  favoriteKeys.value = next
+  if (!reviews.value.some(item => item.snapshotKey === key)) {
+    reviews.value.push({snapshotKey: key, code: stock.code, name: stock.name, frozenAt: stock.completedAt, probability: stock.probability, predictedRange: stock.range, index: stock.index, dueDate: '待计算', actualReturn: '待复盘', direction: '—', interval: '—', deviation: '—', status: 'pending'})
   }
   if (stock.id) {
     try {
       await SetAIRecommendationFavorite(stock.id, favorite)
     } catch (error) {
-      favorite ? next.delete(stock.code) : next.add(stock.code)
-      favoriteCodes.value = new Set(next)
+      favorite ? next.delete(key) : next.add(key)
+      favoriteKeys.value = new Set(next)
       recordError.value = error?.message || String(error)
     }
   }
@@ -75,8 +80,8 @@ async function loadPersistedRecords() {
     const cards = (await GetAIRecommendationCards(100, false)).map(backendCard)
     dataMode.value = '本地推荐记录'
     recommendations.value = cards
-    favoriteCodes.value = new Set(cards.filter(card => card.isFavorite).map(card => card.code))
-    reviews.value = cards.filter(card => card.isFavorite).map(card => ({code: card.code, name: card.name, frozenAt: card.completedAt,
+    favoriteKeys.value = new Set(cards.filter(card => card.isFavorite).map(card => snapshotKey(card)))
+    reviews.value = cards.map(card => ({snapshotKey: snapshotKey(card), code: card.code, name: card.name, frozenAt: card.completedAt,
       probability: card.probability, predictedRange: card.range, index: card.index, dueDate: card.dueDate,
       actualReturn: card.actualReturn === null ? '待复盘' : `${card.actualReturn.toFixed(2)}%`, direction: card.directionHit === undefined || card.directionHit === null ? '—' : card.directionHit ? '命中' : '未命中',
       interval: card.rangeHit === undefined || card.rangeHit === null ? '—' : card.rangeHit ? '命中' : '未命中', deviation: card.deviation === null ? '—' : `${card.deviation.toFixed(2)}%`, status: card.reviewStatus}))
@@ -138,8 +143,8 @@ const reviewColumns = [
         <div class="section-heading"><div><h2>收盘后精选</h2><p>目标 10～20 只；证据不足时不强行凑数</p></div><span class="updated">最近记录 {{ latestDataTime }}</span></div>
         <n-empty v-if="!loadingRecords && recommendations.length === 0" description="本地还没有推荐记录" class="manual-empty" />
         <section v-else class="recommend-grid">
-          <n-card v-for="stock in recommendations" :key="stock.code" class="stock-card" :bordered="false">
-            <div class="stock-top"><div><h3>{{ stock.name }}</h3><span>{{ stock.code }} · ¥{{ stock.price }}</span></div><n-button quaternary circle class="favorite" @click="toggleFavorite(stock)">{{ favoriteCodes.has(stock.code) ? '♥' : '♡' }}</n-button></div>
+          <n-card v-for="stock in recommendations" :key="snapshotKey(stock)" class="stock-card" :bordered="false">
+            <div class="stock-top"><div><h3>{{ stock.name }}</h3><span>{{ stock.code }} · ¥{{ stock.price }}</span></div><n-button quaternary circle class="favorite" @click="toggleFavorite(stock)">{{ isFavorite(stock) ? '♥' : '♡' }}</n-button></div>
             <div class="tags"><n-tag v-for="tag in stock.tags" :key="tag" size="small" :type="tagType(tag)" round>{{ tag }}</n-tag></div>
             <div class="prediction"><div><span>7日上涨概率</span><strong>{{ stock.probability }}%</strong><small>模型估计、非实际结果</small></div><div><span>预计涨跌区间</span><strong>{{ stock.range }}</strong><small>第七交易日收盘</small></div></div>
             <div class="index-row"><div><span>AI推荐指数</span><b>{{ stock.index }}</b><small>{{ stock.level }}</small></div><n-progress type="line" :percentage="stock.index" :show-indicator="false" :color="indexColor(stock.index)" rail-color="#f8e8ed" /></div>
@@ -153,12 +158,12 @@ const reviewColumns = [
         <section class="manual-panel"><div class="manual-copy"><span class="eyebrow">SINGLE STOCK</span><h2>搜索一只 A 股</h2><p>{{ isDesktopRuntime ? '查询本机已经保存的历史分析；真实模型入口将在数据与模型配置完成后启用。' : '预览模式仅演示搜索与结果展示，不会调用真实模型。' }}</p></div><n-input-group><n-input v-model:value="query" size="large" placeholder="输入代码或名称，例如 600519" clearable @keyup.enter="analyze"/><n-button size="large" type="primary" color="#d75f83" :loading="analyzing" @click="analyze">{{ isDesktopRuntime ? '查询历史分析' : '演示搜索' }}</n-button></n-input-group></section>
         <n-empty v-if="!analyzedStock && !analyzing" description="搜索结果将在这里展示上涨概率、预计区间和 AI 推荐指数" class="manual-empty" />
         <n-alert v-if="searchMessage" type="warning" class="manual-message">{{ searchMessage }}</n-alert>
-        <n-card v-if="analyzedStock" class="manual-result" :bordered="false"><div class="stock-top"><div><h3>{{ analyzedStock.name }}</h3><span>{{ analyzedStock.code }} · ¥{{ analyzedStock.price }}</span></div><n-button secondary round color="#cc557b" @click="toggleFavorite(analyzedStock)">{{ favoriteCodes.has(analyzedStock.code) ? '已收藏 ♥' : '收藏 ♡' }}</n-button></div><div class="result-metrics"><div><span>7日上涨概率</span><strong>{{ analyzedStock.probability }}%</strong></div><div><span>预计涨跌区间</span><strong>{{ analyzedStock.range }}</strong></div><div><span>AI推荐指数</span><strong>{{ analyzedStock.index }}</strong></div></div><n-alert type="info" :show-icon="false">{{ analyzedStock.reason }} 风险：{{ analyzedStock.risk }}</n-alert></n-card>
+        <n-card v-if="analyzedStock" class="manual-result" :bordered="false"><div class="stock-top"><div><h3>{{ analyzedStock.name }}</h3><span>{{ analyzedStock.code }} · ¥{{ analyzedStock.price }}</span></div><n-button secondary round color="#cc557b" @click="toggleFavorite(analyzedStock)">{{ isFavorite(analyzedStock) ? '已收藏 ♥' : '收藏 ♡' }}</n-button></div><div class="result-metrics"><div><span>7日上涨概率</span><strong>{{ analyzedStock.probability }}%</strong></div><div><span>预计涨跌区间</span><strong>{{ analyzedStock.range }}</strong></div><div><span>AI推荐指数</span><strong>{{ analyzedStock.index }}</strong></div></div><n-alert type="info" :show-icon="false">{{ analyzedStock.reason }} 风险：{{ analyzedStock.risk }}</n-alert></n-card>
       </n-tab-pane>
 
       <n-tab-pane name="favorites" tab="收藏与复盘">
         <div class="section-heading"><div><h2>推荐收藏快照</h2><p>取消收藏只移除关系，原预测和复盘历史继续保留</p></div></div>
-        <n-data-table :columns="reviewColumns" :data="favoriteRows" :bordered="false" class="review-table" />
+        <n-data-table :columns="reviewColumns" :data="favoriteRows" :row-key="row => row.snapshotKey" :bordered="false" class="review-table" />
       </n-tab-pane>
     </n-tabs>
 
@@ -171,9 +176,9 @@ const reviewColumns = [
         <n-descriptions label-placement="top" :column="3" bordered class="detail-section">
           <n-descriptions-item label="推荐基准价">¥{{ selectedStock.price }}</n-descriptions-item><n-descriptions-item label="分析完成时间">{{ selectedStock.completedAt }}</n-descriptions-item><n-descriptions-item label="计划复盘日">{{ selectedStock.dueDate || '待计算' }}</n-descriptions-item>
           <n-descriptions-item label="实际涨跌幅">{{ valueText(selectedStock.actualReturn, '%') }}</n-descriptions-item><n-descriptions-item label="方向判断">{{ hitText(selectedStock.directionHit) }}</n-descriptions-item><n-descriptions-item label="区间判断">{{ hitText(selectedStock.rangeHit) }}</n-descriptions-item>
-          <n-descriptions-item label="区间外偏差">{{ valueText(selectedStock.deviation, '%') }}</n-descriptions-item><n-descriptions-item label="记录类型">{{ selectedStock.id ? '本地持久化记录' : '交互演示记录' }}</n-descriptions-item><n-descriptions-item label="收藏状态">{{ favoriteCodes.has(selectedStock.code) ? '已收藏' : '未收藏' }}</n-descriptions-item>
+          <n-descriptions-item label="区间外偏差">{{ valueText(selectedStock.deviation, '%') }}</n-descriptions-item><n-descriptions-item label="记录类型">{{ selectedStock.id ? '本地持久化记录' : '交互演示记录' }}</n-descriptions-item><n-descriptions-item label="收藏状态">{{ isFavorite(selectedStock) ? '已收藏' : '未收藏' }}</n-descriptions-item>
         </n-descriptions>
-        <div class="detail-actions"><n-button secondary @click="selectedStock = null">关闭</n-button><n-button type="primary" color="#d75f83" @click="toggleFavorite(selectedStock)">{{ favoriteCodes.has(selectedStock.code) ? '取消收藏' : '收藏快照' }}</n-button></div>
+        <div class="detail-actions"><n-button secondary @click="selectedStock = null">关闭</n-button><n-button type="primary" color="#d75f83" @click="toggleFavorite(selectedStock)">{{ isFavorite(selectedStock) ? '取消收藏' : '收藏快照' }}</n-button></div>
       </template>
     </n-modal>
   </main>
