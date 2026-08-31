@@ -210,6 +210,22 @@ export function GetAIResponseResultList(arg1) {
   return window['go']['main']['App']['GetAIResponseResultList'](arg1);
 }
 
+export function GetAIShadowReport(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetAIShadowReport'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GetAIRecommendationCards(arg1, arg2) {
+  return window['go']['main']['App']['GetAIRecommendationCards'](arg1, arg2);
+}
+
+export function GetAIShadowRuntimeHealth() {
+  return window['go']['main']['App']['GetAIShadowRuntimeHealth']();
+}
+
+export function GetAIShadowRuntimeReadiness() {
+  return window['go']['main']['App']['GetAIShadowRuntimeReadiness']();
+}
+
 export function GetAiAssistantSession(arg1) {
   return window['go']['main']['App']['GetAiAssistantSession'](arg1);
 }
@@ -690,6 +706,10 @@ export function IsUSTradingTime() {
   return window['go']['main']['App']['IsUSTradingTime']();
 }
 
+export function ListAIShadowCohorts(arg1, arg2) {
+  return window['go']['main']['App']['ListAIShadowCohorts'](arg1, arg2);
+}
+
 export function LongTigerRank(arg1) {
   return window['go']['main']['App']['LongTigerRank'](arg1);
 }
@@ -748,6 +768,14 @@ export function RestartAsAdmin() {
 
 export function SaveAIResponseResult(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SaveAIResponseResult'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function SetAIRecommendationFavorite(arg1, arg2) {
+  return window['go']['main']['App']['SetAIRecommendationFavorite'](arg1, arg2);
+}
+
+export function SearchAIRecommendationCards(arg1, arg2) {
+  return window['go']['main']['App']['SearchAIRecommendationCards'](arg1, arg2);
 }
 
 export function SaveAiAssistantSession(arg1, arg2) {

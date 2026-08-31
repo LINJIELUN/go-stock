@@ -5,6 +5,7 @@ import {data} from '../models';
 import {context} from '../models';
 import {main} from '../models';
 import {lo} from '../models';
+import {recommendation} from '../models';
 
 export function AbortChatWithAgent():Promise<void>;
 
@@ -109,6 +110,14 @@ export function FollowFund(arg1:string):Promise<string>;
 export function GetAIResponseResult(arg1:string):Promise<models.AIResponseResult>;
 
 export function GetAIResponseResultList(arg1:models.AIResponseResultQuery):Promise<models.AIResponseResultPageData>;
+
+export function GetAIShadowReport(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<recommendation.ShadowReport>;
+
+export function GetAIRecommendationCards(arg1:number,arg2:boolean):Promise<Array<recommendation.RecommendationCard>>;
+
+export function GetAIShadowRuntimeHealth():Promise<recommendation.RuntimeControllerHealth>;
+
+export function GetAIShadowRuntimeReadiness():Promise<recommendation.RuntimeReadiness>;
 
 export function GetAiAssistantSession(arg1:string):Promise<models.AiAssistantSessionResp>;
 
@@ -350,6 +359,8 @@ export function IsTradingTime():Promise<boolean>;
 
 export function IsUSTradingTime():Promise<boolean>;
 
+export function ListAIShadowCohorts(arg1:string,arg2:string):Promise<Array<recommendation.ShadowCohort>>;
+
 export function LongTigerRank(arg1:string):Promise<any>;
 
 export function NewChatStream(arg1:string,arg2:string,arg3:string,arg4:number,arg5:any,arg6:boolean,arg7:boolean):Promise<void>;
@@ -379,6 +390,10 @@ export function RemoveStockGroup(arg1:string,arg2:string,arg3:number):Promise<st
 export function RestartAsAdmin():Promise<void>;
 
 export function SaveAIResponseResult(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:number):Promise<void>;
+
+export function SetAIRecommendationFavorite(arg1:number,arg2:boolean):Promise<void>;
+
+export function SearchAIRecommendationCards(arg1:string,arg2:number):Promise<Array<recommendation.RecommendationCard>>;
 
 export function SaveAiAssistantSession(arg1:string,arg2:Array<models.AiAssistantMessage>):Promise<void>;
 

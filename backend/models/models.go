@@ -1130,6 +1130,165 @@ type AiRecommendStocksPageData struct {
 	TotalPages int                 `json:"totalPages"`
 }
 
+// AIRecommendationSnapshot is an immutable, versioned prediction record used by both
+// scheduled and manual analysis. Re-analysis creates another snapshot instead of updating one.
+type AIRecommendationSnapshot struct {
+	gorm.Model
+	SourceType            string    `json:"sourceType" gorm:"size:20;not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
+	ValidationBatchID     uint      `json:"validationBatchId" gorm:"not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
+	InputBundleID         uint      `json:"inputBundleId" gorm:"not null;default:0;index"`
+	InputBundleHash       string    `json:"inputBundleHash" gorm:"size:64;not null;default:'legacy-unknown';index"`
+	StockCode             string    `json:"stockCode" gorm:"size:20;not null;index"`
+	StockName             string    `json:"stockName" gorm:"size:80;not null"`
+	RiskLabelsJSON        string    `json:"riskLabelsJson" gorm:"type:text;not null;default:'[]'"`
+	CompletedAt           time.Time `json:"completedAt" gorm:"not null;index"`
+	DataAsOf              time.Time `json:"dataAsOf" gorm:"not null"`
+	BaselinePrice         float64   `json:"baselinePrice" gorm:"not null"`
+	BaselineMarketTime    time.Time `json:"baselineMarketTime" gorm:"not null"`
+	RiseProbability       float64   `json:"riseProbability" gorm:"not null"`
+	ReturnRangeLow        float64   `json:"returnRangeLow" gorm:"not null"`
+	ReturnRangeHigh       float64   `json:"returnRangeHigh" gorm:"not null"`
+	AIRecommendationIndex int       `json:"aiRecommendationIndex" gorm:"not null;index"`
+	ScoreComponentsJSON   string    `json:"scoreComponentsJson" gorm:"type:text;not null"`
+	PenaltiesJSON         string    `json:"penaltiesJson" gorm:"type:text;not null;default:'[]'"`
+	Rationale             string    `json:"rationale" gorm:"type:text"`
+	RiskNotes             string    `json:"riskNotes" gorm:"type:text"`
+	ModelVersion          string    `json:"modelVersion" gorm:"size:100;not null"`
+	PromptVersion         string    `json:"promptVersion" gorm:"size:100;not null;default:'legacy-unknown'"`
+	ProbabilityNotice     string    `json:"probabilityNotice" gorm:"size:100;not null;default:'模型估计、非实际结果'"`
+	EvidenceJSON          string    `json:"evidenceJson" gorm:"type:text;not null;default:'[]'"`
+	AgentConclusionsJSON  string    `json:"agentConclusionsJson" gorm:"type:text;not null;default:'{}'"`
+	StrategyVersion       string    `json:"strategyVersion" gorm:"size:100;not null;index;uniqueIndex:idx_recommendation_validation_strategy"`
+	ReviewDueDate         time.Time `json:"reviewDueDate" gorm:"type:date;not null;index"`
+	Status                string    `json:"status" gorm:"size:30;not null;index"`
+	SupersedesID          *uint     `json:"supersedesId" gorm:"index"`
+}
+
+func (AIRecommendationSnapshot) TableName() string { return "ai_recommendation_snapshots" }
+
+// AIRecommendationFavorite keeps the relationship even when a user removes a favorite,
+// preserving the associated prediction and review history for later auditing.
+type AIRecommendationFavorite struct {
+	gorm.Model
+	RecommendationID uint       `json:"recommendationId" gorm:"not null;uniqueIndex"`
+	IsFavorite       bool       `json:"isFavorite" gorm:"not null;default:true;index"`
+	FavoritedAt      time.Time  `json:"favoritedAt" gorm:"not null"`
+	UnfavoritedAt    *time.Time `json:"unfavoritedAt"`
+}
+
+func (AIRecommendationFavorite) TableName() string { return "ai_recommendation_favorites" }
+
+// AIRecommendationReview stores the eventual seven-trading-day outcome. A suspended stock
+// remains pending until the first valid close after resumption and records both dates.
+type AIRecommendationReview struct {
+	gorm.Model
+	RecommendationID      uint       `json:"recommendationId" gorm:"not null;uniqueIndex"`
+	OriginalDueDate       time.Time  `json:"originalDueDate" gorm:"type:date;not null;index"`
+	ActualReviewDate      *time.Time `json:"actualReviewDate" gorm:"type:date"`
+	ActualClosePrice      *float64   `json:"actualClosePrice"`
+	ActualReturnPercent   *float64   `json:"actualReturnPercent"`
+	DirectionHit          *bool      `json:"directionHit"`
+	RangeHit              *bool      `json:"rangeHit"`
+	OutsideRangeDeviation *float64   `json:"outsideRangeDeviation"`
+	MarketTime            *time.Time `json:"marketTime"`
+	DataSource            string     `json:"dataSource" gorm:"size:80"`
+	Status                string     `json:"status" gorm:"size:30;not null;index"`
+	DelayReason           string     `json:"delayReason" gorm:"size:200"`
+}
+
+func (AIRecommendationReview) TableName() string { return "ai_recommendation_reviews" }
+
+// MarketDataValidationBatch is the immutable audit record for one end-of-day
+// dual-source validation run. AI jobs may consume only batches with status passed.
+type MarketDataValidationBatch struct {
+	gorm.Model
+	BatchKey           string    `json:"batchKey" gorm:"size:64;not null;uniqueIndex"`
+	InstrumentCode     string    `json:"instrumentCode" gorm:"size:20;not null;index"`
+	Exchange           string    `json:"exchange" gorm:"size:10;not null"`
+	SecurityType       string    `json:"securityType" gorm:"size:20;not null"`
+	RangeStart         time.Time `json:"rangeStart" gorm:"type:date;not null;index"`
+	RangeEnd           time.Time `json:"rangeEnd" gorm:"type:date;not null;index"`
+	CalendarSource     string    `json:"calendarSource" gorm:"size:80;not null"`
+	PrimarySource      string    `json:"primarySource" gorm:"size:80;not null"`
+	ReferenceSource    string    `json:"referenceSource" gorm:"size:80;not null"`
+	ValidatedAt        time.Time `json:"validatedAt" gorm:"not null;index"`
+	Status             string    `json:"status" gorm:"size:20;not null;index"`
+	ExpectedDates      int       `json:"expectedDates" gorm:"not null"`
+	ReleasedBars       int       `json:"releasedBars" gorm:"not null"`
+	ReconciliationJSON string    `json:"reconciliationJson" gorm:"type:text;not null"`
+}
+
+func (MarketDataValidationBatch) TableName() string { return "market_data_validation_batches" }
+
+// AIAnalysisRun represents one resumable post-close recommendation cycle.
+type AIAnalysisRun struct {
+	gorm.Model
+	TradeDate       time.Time  `json:"tradeDate" gorm:"type:date;not null;uniqueIndex:idx_analysis_run_date_strategy"`
+	StrategyVersion string     `json:"strategyVersion" gorm:"size:100;not null;uniqueIndex:idx_analysis_run_date_strategy"`
+	Status          string     `json:"status" gorm:"size:20;not null;index"`
+	TotalJobs       int        `json:"totalJobs" gorm:"not null"`
+	CompletedJobs   int        `json:"completedJobs" gorm:"not null"`
+	FailedJobs      int        `json:"failedJobs" gorm:"not null"`
+	StartedAt       *time.Time `json:"startedAt"`
+	CompletedAt     *time.Time `json:"completedAt"`
+}
+
+func (AIAnalysisRun) TableName() string { return "ai_analysis_runs" }
+
+// AIAnalysisJob isolates each stock so one provider/model failure cannot lose
+// the progress of the rest of a post-close run.
+type AIAnalysisJob struct {
+	gorm.Model
+	RunID             uint       `json:"runId" gorm:"not null;index;uniqueIndex:idx_analysis_run_stock"`
+	StockCode         string     `json:"stockCode" gorm:"size:20;not null;uniqueIndex:idx_analysis_run_stock"`
+	StockName         string     `json:"stockName" gorm:"size:80;not null"`
+	ValidationBatchID uint       `json:"validationBatchId" gorm:"not null;index"`
+	ScreeningScore    float64    `json:"screeningScore" gorm:"not null;index"`
+	ScreeningJSON     string     `json:"screeningJson" gorm:"type:text;not null"`
+	Status            string     `json:"status" gorm:"size:20;not null;index"`
+	Attempts          int        `json:"attempts" gorm:"not null"`
+	MaxAttempts       int        `json:"maxAttempts" gorm:"not null"`
+	AvailableAt       time.Time  `json:"availableAt" gorm:"not null;index"`
+	LeaseExpiresAt    *time.Time `json:"leaseExpiresAt" gorm:"index"`
+	LastError         string     `json:"lastError" gorm:"size:500"`
+	RecommendationID  *uint      `json:"recommendationId" gorm:"index"`
+}
+
+func (AIAnalysisJob) TableName() string { return "ai_analysis_jobs" }
+
+// AIModelUsage records reserved and settled model spend for budget enforcement.
+type AIModelUsage struct {
+	gorm.Model
+	JobID            uint       `json:"jobId" gorm:"not null;index;uniqueIndex:idx_ai_usage_job_attempt"`
+	Attempt          int        `json:"attempt" gorm:"not null;uniqueIndex:idx_ai_usage_job_attempt"`
+	Provider         string     `json:"provider" gorm:"size:80;not null;index"`
+	ModelName        string     `json:"model" gorm:"size:120;not null;index"`
+	Status           string     `json:"status" gorm:"size:20;not null;index"`
+	EstimatedCostUSD float64    `json:"estimatedCostUsd" gorm:"not null"`
+	ActualCostUSD    *float64   `json:"actualCostUsd"`
+	InputTokens      int64      `json:"inputTokens" gorm:"not null"`
+	OutputTokens     int64      `json:"outputTokens" gorm:"not null"`
+	ReservedAt       time.Time  `json:"reservedAt" gorm:"not null;index"`
+	SettledAt        *time.Time `json:"settledAt"`
+}
+
+func (AIModelUsage) TableName() string { return "ai_model_usage" }
+
+// AIAnalysisInputBundle freezes every locally approved input before any model
+// request, so retries and later reviews can reproduce the exact evidence set.
+type AIAnalysisInputBundle struct {
+	gorm.Model
+	JobID             uint      `json:"jobId" gorm:"not null;index"`
+	StockCode         string    `json:"stockCode" gorm:"size:20;not null;index"`
+	ValidationBatchID uint      `json:"validationBatchId" gorm:"not null;index"`
+	BundleHash        string    `json:"bundleHash" gorm:"size:64;not null;uniqueIndex"`
+	SchemaVersion     string    `json:"schemaVersion" gorm:"size:80;not null"`
+	DataAsOf          time.Time `json:"dataAsOf" gorm:"not null;index"`
+	PayloadJSON       string    `json:"payloadJson" gorm:"type:text;not null"`
+}
+
+func (AIAnalysisInputBundle) TableName() string { return "ai_analysis_input_bundles" }
+
 // StockFinancialInfoResp
 type StockFinancialInfoResp struct {
 	Version string `json:"version"`

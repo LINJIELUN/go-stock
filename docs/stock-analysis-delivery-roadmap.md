@@ -1,5 +1,11 @@
 # 可用股票分析软件交付路线图
 
+> TradingAgents 的阶段性集成边界、模型选择原则和验证闸门见
+> [TradingAgents 集成决策](./tradingagents-integration-decision.md)。行情预算上限和字段降级原则见
+> [A 股行情源与 AI 成本初步评估](./market-data-and-ai-cost-assessment.md)。
+>
+> 2026-08-17 起产品改为[收盘后分析优先](./end-of-day-analysis-scope.md)；本文后续“接近实时”内容仅作为可选盘中能力，不再阻塞第一版 AI 推荐与复盘。
+
 ## 1. 先纠正目标定义
 
 “形式不限”并不等于桌面端、Web 端和移动端可以同时推进。当前项目是 Wails 桌面应用，主前端通过 Wails 绑定直接调用 Go 方法；将它直接放到静态托管平台并不会自动变成 Web 应用。若当前核心目标是尽快获得一个**可以持续使用**的股票分析软件，第一选择应是修复并交付现有桌面端，而不是先做 Netlify 改造。
@@ -142,3 +148,7 @@ Web 化时应保留 Go 数据层，但新增独立 HTTP API，并把 Vue 中的 
 ## 7. 实施开始前仍需完成的一项选择
 
 产品范围已足够明确，可以开始 P0 的 Windows 构建工作；但“接近实时”仍缺少可执行的数据方案。下一步应并行评估候选行情源并形成一张对比表，至少记录覆盖范围、实测延迟、授权、价格、限流、稳定性和备用方案。最终选源前可以完成构建、股票池校验和离线测试，但不能完成实时行情验收。
+
+AI 推荐、手动单股分析、七交易日复盘及收藏快照的最新确认口径见 [`ai-recommendation-product-decisions.md`](./ai-recommendation-product-decisions.md)。该文档同时列出了实施前仍需确认的产品参数；未确认的参数不得在代码中隐式写死。
+
+A 股行情候选、开源项目边界、数据源验收实验和 AI Token 成本场景见 [`market-data-and-ai-cost-assessment.md`](./market-data-and-ai-cost-assessment.md)。开源客户端只能作为技术候选，不能替代行情授权与持续延迟验收。

@@ -45,7 +45,6 @@ const router = useRouter()
 const loading = ref(true)
 const loadingMsg = ref("加载数据中...")
 const enableNews = ref(false)
-const contentStyle = ref("")
 const enableFund = ref(false)
 const enableAgent = ref(false)
 const enableDarkTheme = ref(darkTheme)
@@ -58,6 +57,7 @@ const telegraph = ref([])
 const groupList = ref([])
 const officialStatement= ref("")
 const marketStatus = ref('')
+const sidebarCollapsed = ref(false)
 let marketStatusTimer = null
 
 const investmentMottos = [
@@ -589,6 +589,18 @@ const menuOptions = ref([
     show:enableAgent.value,
     icon: renderIcon(Robot),
   },
+  {
+    label: () => h(
+        RouterLink,
+        {
+          to: { name: 'aiRecommendations' },
+          onClick: () => { activeKey.value = 'aiRecommendations' },
+        },
+        {default: () => 'AI 股票研究'}
+    ),
+    key: 'aiRecommendations',
+    icon: renderIcon(TrendingUp),
+  },
     {
       label: () =>
           h(
@@ -1036,6 +1048,15 @@ const menuOptions = ref([
   },
 ])
 
+// 将高频业务入口与低频系统操作分区，避免所有功能挤在同一条底部菜单中。
+// 菜单项本身仍复用原来的路由与事件处理，确保改版不改变既有功能行为。
+const businessMenuOptions = menuOptions.value.filter((item) =>
+    ['stock', 'market', 'klineAnalysis', 'fund', 'research'].includes(item.key)
+)
+const intelligentMenuOptions = menuOptions.value.filter((item) => ['agent', 'aiShadowReport'].includes(item.key))
+const systemMenuOptions = menuOptions.value.filter((item) => ['settings', 'about'].includes(item.key))
+const windowMenuOptions = menuOptions.value.filter((item) => ['full', 'hide', 'exit'].includes(item.key))
+
 // 重建"股票自选"菜单的分组子项（保留"全部"，用最新分组列表替换其余子项）
 function refreshStockGroupMenu() {
   GetGroupList().then(result => {
@@ -1216,7 +1237,6 @@ onMounted(() => {
     refreshMotto()
     updateMarketStatus()
   }, 60000)
-  contentStyle.value = "max-height: calc(92vh);overflow: hidden"
   GetConfig().then((res) => {
     if (res.enableNews) {
       enableNews.value = true
@@ -1284,38 +1304,94 @@ onMounted(() => {
             >
 <!--              <FloatingAiAssistant />-->
               <FloatingAgentAssistant />
-              <n-flex>
-                <n-grid x-gap="12" :cols="1">
-                  <n-gi>
+              <div class="app-shell" :class="{ 'is-dark': !!enableDarkTheme }">
+                <aside class="app-sidebar" :class="{ 'is-collapsed': sidebarCollapsed }" aria-label="主功能导航">
+                  <div class="sidebar-brand">
+                    <div class="brand-mark">杰</div>
+                    <div v-show="!sidebarCollapsed" class="brand-copy">
+                      <strong>杰伦股市分析</strong>
+                      <span>智能投资研究工作台</span>
+                    </div>
+                    <n-button class="collapse-button" quaternary circle size="small"
+                              :title="sidebarCollapsed ? '展开功能导航' : '收起功能导航'"
+                              @click="sidebarCollapsed = !sidebarCollapsed">
+                      <template #icon><n-icon><ReorderTwoOutline /></n-icon></template>
+                    </n-button>
+                  </div>
+
+                  <n-scrollbar class="sidebar-scroll">
+                    <nav class="sidebar-nav">
+                      <div class="nav-section">
+                        <div v-show="!sidebarCollapsed" class="nav-section-title">行情与交易</div>
+                        <n-menu
+                            v-model:value="activeKey"
+                            :options="businessMenuOptions"
+                            :collapsed="sidebarCollapsed"
+                            :collapsed-width="64"
+                            :collapsed-icon-size="22"
+                            :indent="18"
+                        />
+                      </div>
+                      <div class="nav-section">
+                        <div v-show="!sidebarCollapsed" class="nav-section-title">智能助手</div>
+                        <n-menu
+                            v-model:value="activeKey"
+                            :options="intelligentMenuOptions"
+                            :collapsed="sidebarCollapsed"
+                            :collapsed-width="64"
+                            :collapsed-icon-size="22"
+                            :indent="18"
+                        />
+                      </div>
+                    </nav>
+                  </n-scrollbar>
+
+                  <div class="sidebar-footer">
+                    <div v-show="!sidebarCollapsed" class="nav-section-title">系统</div>
+                    <n-menu
+                        v-model:value="activeKey"
+                        :options="systemMenuOptions"
+                        :collapsed="sidebarCollapsed"
+                        :collapsed-width="64"
+                        :collapsed-icon-size="22"
+                        :indent="18"
+                    />
+                    <n-divider class="sidebar-divider" />
+                    <n-menu
+                        v-model:value="activeKey"
+                        :options="windowMenuOptions"
+                        :collapsed="sidebarCollapsed"
+                        :collapsed-width="64"
+                        :collapsed-icon-size="22"
+                        :indent="18"
+                    />
+                  </div>
+                </aside>
+
+                <main class="app-workspace">
+                  <div class="workspace-status" aria-live="polite">
+                    <span class="status-dot"></span>
+                    <span>{{ marketStatus || '正在获取市场状态' }}</span>
+                  </div>
+                  <div class="workspace-content">
                     <n-spin :show="loading">
                       <template #description>
                         {{ loadingMsg }}
                       </template>
-                      <n-marquee :speed="100" style="position: relative;top:0;z-index: 19;width: 100%"
+                      <n-marquee class="workspace-marquee" :speed="100"
                                  v-if="(telegraph.length>0)&&(enableNews)">
                         <n-tag type="warning" v-for="item in telegraph" style="margin-right: 10px">
                           {{ item }}
                         </n-tag>
                       </n-marquee>
-                      <n-scrollbar :style="contentStyle">
+                      <n-scrollbar class="workspace-scroll">
                         <n-skeleton v-if="loading" height="calc(100vh)" />
                         <RouterView/>
                       </n-scrollbar>
                     </n-spin>
-                  </n-gi>
-                  <n-gi style="position: fixed;bottom:0;z-index: 9;width: 100%;">
-                    <n-card size="small" style="--wails-draggable:no-drag">
-                      <n-menu style="font-size: 18px;"
-                              v-model:value="activeKey"
-                              mode="horizontal"
-                              :options="menuOptions"
-                              :dropdown-props="{ menuProps: () => ({ style: 'max-height: 60vh; overflow-y: auto;' }) }"
-                              responsive
-                      />
-                    </n-card>
-                  </n-gi>
-                </n-grid>
-              </n-flex>
+                  </div>
+                </main>
+              </div>
             </n-watermark>
           </n-dialog-provider>
         </n-modal-provider>
@@ -1323,6 +1399,232 @@ onMounted(() => {
     </n-message-provider>
   </n-config-provider>
 </template>
-<style>
+<style scoped>
+.app-shell {
+  --shell-surface: #fff;
+  --shell-background: #f4f6f8;
+  --shell-border: #e5e7eb;
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--shell-background);
+  text-align: left;
+}
 
+.app-shell.is-dark {
+  --shell-surface: #18181c;
+  --shell-background: #101014;
+  --shell-border: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.82);
+  background: var(--shell-background);
+}
+
+.app-sidebar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex: 0 0 232px;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  box-sizing: border-box;
+  border-right: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+  box-shadow: 6px 0 24px rgba(15, 23, 42, 0.04);
+  --wails-draggable: no-drag;
+  transition: flex-basis 0.2s ease;
+}
+
+.app-sidebar.is-collapsed {
+  flex-basis: 64px;
+}
+
+.is-dark .app-sidebar,
+.is-dark .sidebar-footer {
+  border-color: var(--shell-border);
+  background: var(--shell-surface);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--n-border-color, #eef0f2);
+  --wails-draggable: drag;
+}
+
+.collapse-button {
+  margin-left: auto;
+  --wails-draggable: no-drag;
+}
+
+.is-collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.is-collapsed .brand-mark {
+  display: none;
+}
+
+.is-collapsed .collapse-button {
+  margin-left: 0;
+}
+
+.brand-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #18a058, #0f7a43);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgba(24, 160, 88, 0.24);
+}
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.brand-copy strong {
+  font-size: 17px;
+  letter-spacing: 0.2px;
+}
+
+.brand-copy span {
+  margin-top: 4px;
+  color: var(--n-text-color-3, #8b949e);
+  font-size: 11px;
+}
+
+.sidebar-scroll {
+  min-height: 0;
+  flex: 1;
+}
+
+.sidebar-nav {
+  padding: 12px 10px;
+}
+
+.is-collapsed .sidebar-nav,
+.is-collapsed .sidebar-footer {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.nav-section + .nav-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--n-border-color, #eef0f2);
+}
+
+.nav-section-title {
+  padding: 0 10px 7px;
+  color: var(--n-text-color-3, #8b949e);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.sidebar-footer {
+  padding: 10px;
+  border-top: 1px solid var(--n-border-color, #eef0f2);
+  background: var(--n-card-color, #fff);
+}
+
+.sidebar-divider {
+  margin: 6px 0;
+}
+
+.app-sidebar :deep(.n-menu-item-content) {
+  border-radius: 8px;
+}
+
+.app-sidebar :deep(.n-menu-item-content-header) {
+  font-size: 14px;
+}
+
+.app-workspace {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.workspace-status {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(520px, 55%);
+  padding: 6px 11px;
+  border: 1px solid var(--n-border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--n-card-color, #fff) 88%, transparent);
+  color: var(--n-text-color-2, #59636e);
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #18a058;
+  box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.14);
+}
+
+.workspace-content,
+.workspace-content :deep(.n-spin-container) {
+  height: 100%;
+}
+
+.workspace-content :deep(.n-spin-content) {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+}
+
+.workspace-marquee {
+  position: relative;
+  z-index: 19;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.workspace-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 900px) {
+  .app-sidebar {
+    flex-basis: 196px;
+  }
+
+  .brand-copy span {
+    display: none;
+  }
+
+  .workspace-status {
+    display: none;
+  }
+}
 </style>
